@@ -1,8 +1,8 @@
-- clone repo
+### Clone repo
 ```
 git clone https://github.com/estuart/toughbook_demo_webapp
 ```
- - install dependencies
+### Install dependencies and copy configs
 ```
 dnf install ansible git nginx python3-pip
 ```
@@ -20,9 +20,9 @@ sudo systemctl restart firewalld
 ```
 
 Copy `config/workload-selector.service` file to `/etc/systemd/system/` and edit file to reflect the proper paths
-Copy 'config/flask_app.conf` file to `/etc/nginx/conf.d/`
+Copy `config/flask_app.conf` file to `/etc/nginx/conf.d/`
 
-Now we enable the various services
+### Enable Services
 ```
 systemctl daemon-reload
 systemctl start nginx
@@ -31,5 +31,9 @@ systemctl start workload-selector
 systemctl enable workload-selector
 ```
 
-Debug
-You might need to disable selinux with `setenforce 0`
+### Debug
+You might need to disable selinux with `setenforce 0` or you can set the below booleans and likely have the app work with selinux in enforcing mode
+```
+sudo setsebool -P httpd_can_network_connect on
+sudo setsebool -P httpd_enable_homedirs on
+```
