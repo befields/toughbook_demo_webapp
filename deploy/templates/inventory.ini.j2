@@ -1,0 +1,4 @@
+[my_hosts]
+{% for ip in target_ips %}
+{{ ip }} ansible_user={{ target_ssh_user }} ansible_ssh_pass={{ target_ssh_pass }} ansible_become_pass={{ target_become_pass }}
+{% endfor %}

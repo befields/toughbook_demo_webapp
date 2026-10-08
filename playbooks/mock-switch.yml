@@ -1,0 +1,18 @@
+---
+# Rehearsal stand-in for switch-image.yml. Proves the full chain
+# (web -> ansible -> ssh -> target -> reboot) against a PLAIN Linux VM that is
+# NOT a bootc host. It logs in for real, so SSH/creds/network are genuinely
+# tested; it just does not swap the image. Select with SWITCH_PLAYBOOK=mock-switch.yml.
+- name: (MOCK) Pretend to switch the bootc image
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Confirm we can reach and log in to the target
+      ansible.builtin.ping:
+
+    - name: Show what the real run would switch to
+      ansible.builtin.debug:
+        msg: >
+          MOCK: would switch to
+          {{ target_image | default('192.168.8.200:5000/bootc-flightgear:' + bootc_image_tag) }}
+          and reboot.

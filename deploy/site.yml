@@ -1,0 +1,140 @@
+---
+# One-shot setup for the RHEL tablet (all-in-one control plane).
+# Run ON THE TABLET:  sudo ansible-playbook deploy/site.yml
+#
+# Idempotent — safe to re-run. Edit deploy/vars.yml first.
+
+- name: Deploy Workload Selector on the RHEL tablet
+  hosts: localhost
+  connection: local
+  become: true
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Install required packages
+      ansible.builtin.dnf:
+        name:
+          - nginx
+          - python3
+          - python3-pip
+          - firewalld
+          - policycoreutils-python-utils
+          - podman
+          - git
+        state: present
+
+    - name: Create the Python virtual environment
+      ansible.builtin.command: "python3 -m venv {{ venv_dir }}"
+      args:
+        creates: "{{ venv_dir }}/bin/activate"
+
+    - name: Install Python requirements into the venv
+      ansible.builtin.pip:
+        requirements: "{{ app_dir }}/requirements.txt"
+        virtualenv: "{{ venv_dir }}"
+        extra_args: --upgrade
+
+    - name: Render inventory.ini (keeps credentials out of git)
+      ansible.builtin.template:
+        src: templates/inventory.ini.j2
+        dest: "{{ app_dir }}/inventory.ini"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0640"
+
+    - name: Deploy the nginx reverse-proxy config
+      ansible.builtin.template:
+        src: templates/flask_app.conf.j2
+        dest: /etc/nginx/conf.d/flask_app.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: reload nginx
+
+    - name: Deploy the workload-selector systemd unit
+      ansible.builtin.template:
+        src: templates/workload-selector.service.j2
+        dest: /etc/systemd/system/workload-selector.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: reload systemd
+
+    - name: Allow nginx to connect to the gunicorn backend (SELinux)
+      ansible.posix.seboolean:
+        name: httpd_can_network_connect
+        state: true
+        persistent: true
+
+    - name: Ensure firewalld is running
+      ansible.builtin.service:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Open HTTP (80) for the web UI
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        immediate: true
+        state: enabled
+
+    - name: Open 5000/tcp for the image registry
+      ansible.posix.firewalld:
+        port: 5000/tcp
+        permanent: true
+        immediate: true
+        state: enabled
+
+    # ---- Optional local registry on the tablet ----
+    - name: Create the registry data directory
+      ansible.builtin.file:
+        path: "{{ registry_data_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0755"
+      when: deploy_registry | bool
+
+    - name: Deploy the registry quadlet
+      ansible.builtin.template:
+        src: templates/flightgear-registry.container.j2
+        dest: /etc/containers/systemd/flightgear-registry.container
+        owner: root
+        group: root
+        mode: "0644"
+      when: deploy_registry | bool
+      notify: reload systemd
+
+    - name: Flush handlers before starting services
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start the registry
+      ansible.builtin.systemd:
+        name: flightgear-registry.service
+        state: started
+        enabled: true
+      when: deploy_registry | bool
+
+    - name: Enable and start nginx
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Enable and start the workload selector
+      ansible.builtin.systemd:
+        name: workload-selector.service
+        state: started
+        enabled: true
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded

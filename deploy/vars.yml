@@ -1,0 +1,35 @@
+---
+# Edit these for your booth. Everything else keys off them.
+
+# The RHEL tablet's login user that will own and run the app.
+app_user: redhat
+
+# Static IPs on your travel-router LAN.
+server_ip: "192.168.8.100"      # the tablet (web UI + Ansible + registry)
+target_ips:                     # the Toughbooks being re-imaged
+  - "192.168.8.101"
+  - "192.168.8.102"
+
+# Credentials for Ansible to reach the Toughbook target.
+# These are rendered into inventory.ini at deploy time and NEVER committed.
+# For a VM test, point these at your target VM. Defaults match the kiosk demo.
+target_ssh_user: "core"
+target_ssh_pass: "edge"
+target_become_pass: "edge"
+
+# Registry that serves the bootc images. Default: the tablet itself.
+registry_host: "{{ server_ip }}:5000"
+image_repo: "bootc-flightgear"
+
+# Workload tags wired to the buttons. Must match templates/index.html.
+workloads: "f22,b52,f35,f35-fixed,base"
+
+# Stand up a local container registry ON THE TABLET.
+# Set false if your peer hosts the registry on a different box — then just
+# point registry_host above at that box.
+deploy_registry: true
+registry_data_dir: "/home/{{ app_user }}/registry-data"
+
+# Derived — you normally don't touch these.
+app_dir: "/home/{{ app_user }}/toughbook_demo_webapp"
+venv_dir: "{{ app_dir }}/venv"

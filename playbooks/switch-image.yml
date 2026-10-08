@@ -6,7 +6,7 @@
   tasks:
     - name: Switch to the specified BootC image
       community.general.bootc_manage:
-        image: "192.168.8.200:5000/bootc-flightgear:{{ bootc_image_tag }}"
+        image: "{{ target_image | default('192.168.8.200:5000/bootc-flightgear:' + bootc_image_tag) }}"
         state: switch
       register: bootc_result
 

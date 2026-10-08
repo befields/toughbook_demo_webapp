@@ -1,0 +1,13 @@
+---
+# Rehearsal stand-in for reboot.yml — does NOT reboot the target, so you can
+# click through the UI repeatedly. Select with REBOOT_PLAYBOOK=mock-reboot.yml.
+- name: (MOCK) Pretend to reboot
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Confirm we can reach the target
+      ansible.builtin.ping:
+
+    - name: Show what the real run would do
+      ansible.builtin.debug:
+        msg: "MOCK: would reboot the target now."

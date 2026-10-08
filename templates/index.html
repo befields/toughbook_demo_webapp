@@ -49,6 +49,28 @@
             background-color: #3E810E;
         }
 
+        .target-select {
+            margin-bottom: 10px;
+        }
+
+        .target {
+            font-size: 15px;
+            padding: 8px 18px;
+            margin: 4px;
+            cursor: pointer;
+            background-color: #3a3f4b;
+            color: #9aa0ab;
+            border: 1px solid #555;
+            border-radius: 20px;
+        }
+
+        .target.active {
+            background-color: #61dafb;
+            color: #282c34;
+            border-color: #61dafb;
+            font-weight: bold;
+        }
+
         .loading {
             font-size: 24px;
             margin-top: 20px;
@@ -109,6 +131,14 @@
 <body>
     <h1>Workload Selector</h1>
 
+    <!-- Target selector: which toughbook(s) the workload applies to -->
+    <div class="target-select" id="target-select">
+        <button class="target active" data-target="all" onclick="setTarget(this)">Both</button>
+        {% for ip in targets %}
+        <button class="target" data-target="{{ ip }}" onclick="setTarget(this)">Unit {{ loop.index }}</button>
+        {% endfor %}
+    </div>
+
     <!-- Buttons for the workloads -->
     <button class="button" onclick="runWorkload('f22')">F22</button>
     <button class="button" onclick="runWorkload('b52')">B52</button>
@@ -132,6 +162,14 @@
     </div>
 
     <script>
+        let selectedTarget = 'all';
+        function setTarget(btn) {
+            selectedTarget = btn.getAttribute('data-target');
+            document.querySelectorAll('.target').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            displayResult(`Target set: ${btn.textContent}`);
+        }
+
         function showLoading() {
             document.getElementById('loading').style.display = 'block';
         }
@@ -179,7 +217,9 @@
             try {
                 const switchResponsePromise = fetch(`/workload/${workload}`, {
                     method: 'POST',
-                    signal: controller.signal
+                    signal: controller.signal,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ target: selectedTarget })
                 });
 
                 // Wait for workload request to complete
@@ -187,18 +227,18 @@
 
                 clearTimeout(timeoutId);  // Clear the timeout if the request completes
 
-                const switchResult = await switchResponse.text();
-                displayResult(`Workload response: ${switchResult}`);
+                const data = await switchResponse.json();
+                displayResult(data.output || '(no output)');
 
-                if (switchResponse.ok) {
+                if (switchResponse.ok && data.ok) {
                     // Hide the progress bar before initiating reboot
                     hideProgressBar();
 
-                    // Step 2: After workload completion, initiate reboot
-                    displayResult(`Workload completed successfully. Initiating system reboot...`);
+                    // Step 2: After a confirmed success, initiate reboot
+                    displayResult(`Workload '${workload}' switched successfully. Initiating reboot...`);
                     await rebootSystem();
                 } else {
-                    displayResult(`Error during workload switch:\n${switchResult}`);
+                    displayResult(`>>> WORKLOAD SWITCH FAILED. Target NOT rebooted.`);
                     hideProgressBar();  // Hide progress bar if there's an error
                 }
             } catch (error) {
@@ -217,10 +257,16 @@
         async function rebootSystem() {
             try {
                 const response = await fetch('/reboot', {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ target: selectedTarget })
                 });
-                const result = await response.text();
-                displayResult(`System reboot initiated.\nReboot Result:\n${result}`);
+                const data = await response.json();
+                if (response.ok && data.ok) {
+                    displayResult(`System reboot initiated.\n${data.output || ''}`);
+                } else {
+                    displayResult(`>>> REBOOT FAILED.\n${data.output || ''}`);
+                }
             } catch (error) {
                 displayResult(`An error occurred during reboot: ${error.message}`);
             }

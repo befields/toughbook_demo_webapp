@@ -1,0 +1,29 @@
+# Quadlet for the Workload Selector control app (runs on the RHEL tablet).
+# Install to: /etc/containers/systemd/workload-selector.container
+# Then: sudo systemctl daemon-reload && sudo systemctl start workload-selector
+#
+# EDIT the Environment lines for your booth. This file lives on the tablet
+# only — it holds credentials, so it is NOT in git.
+[Unit]
+Description=Toughbook Workload Selector (Flask control app)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=localhost/workload-selector:latest
+Network=host
+Environment=TARGET_IPS=192.168.8.101,192.168.8.102
+Environment=TARGET_SSH_USER=core
+Environment=TARGET_SSH_PASS=edge
+Environment=TARGET_BECOME_PASS=edge
+Environment=REGISTRY_HOST=192.168.8.100:5000
+Environment=IMAGE_REPO=bootc-flightgear
+Environment=WORKLOADS=f22,b52,f35,f35-fixed,base
+Environment=PORT=80
+
+[Service]
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target default.target

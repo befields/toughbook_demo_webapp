@@ -1,0 +1,19 @@
+[Unit]
+Description=Gunicorn instance to serve the Workload Selector Flask app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ app_user }}
+WorkingDirectory={{ app_dir }}
+Environment="PATH={{ venv_dir }}/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="TARGET_IP={{ target_ip }}"
+Environment="REGISTRY_HOST={{ registry_host }}"
+Environment="IMAGE_REPO={{ image_repo }}"
+Environment="WORKLOADS={{ workloads }}"
+ExecStart={{ venv_dir }}/bin/gunicorn --workers 3 --timeout 300 --bind 127.0.0.1:8000 app:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

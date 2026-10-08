@@ -1,0 +1,5 @@
+# This file is rendered automatically by deploy/site.yml from deploy/vars.yml.
+# It is git-ignored once rendered so credentials never land in the repo.
+# For a quick manual/VM test you can copy this to inventory.ini and edit it.
+[my_hosts]
+192.168.8.100 ansible_user=core ansible_ssh_pass=CHANGEME ansible_become_pass=CHANGEME

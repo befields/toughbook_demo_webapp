@@ -8,3 +8,6 @@ dist/
 htmlcov/
 .tox/
 docs/_build/
+
+# Rendered at deploy time — contains credentials, never commit
+inventory.ini

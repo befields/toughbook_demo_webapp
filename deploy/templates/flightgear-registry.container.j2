@@ -1,0 +1,15 @@
+[Unit]
+Description=Local OCI registry serving bootc-flightgear images
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/library/registry:2
+PublishPort=5000:5000
+Volume={{ registry_data_dir }}:/var/lib/registry:Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target default.target
