@@ -1,115 +1,116 @@
-# Booth Setup — Toughbook Workload Selector (Quick Start)
+# Booth Setup — TACEDGE Mission Controller (Quick Start)
 
 Follow these steps **in order, on the tablet**. Each step says what to run and
 what you should see. If a step doesn't look right, stop and call Benny.
 
+**What this demo is:** the tablet is the *mission controller*. Tapping a mission
+switches the Toughbooks to a different **bootc (RHEL image mode) image** and
+reboots them into it — Tactical COP, Counter-UAS, ISR, Network Ops,
+Sustainment, a deliberately *faulty* COP build (to show rollback), and a
+Standby screen. A second button type deploys **Red Hat Offline Knowledge
+Portal** as a container on the Toughbooks — no reboot.
+
 ---
 
-## Before you start — confirm these are true (ask Benny if unsure)
+## Before you start — confirm these are true
 
-- [ ] The **tablet** is a RHEL machine, powered on, on the travel-router network as **192.168.8.100**.
-- [ ] The **two Toughbooks** are powered on as **192.168.8.101** and **192.168.8.102**, are bootc (image-mode) systems, and are allowed to pull images from **192.168.8.100:5000**.
-- [ ] The **FlightGear images are already in the registry** at `192.168.8.100:5000`, named `bootc-flightgear`, with tags `f22`, `b52`, `f35`, `f35-fixed`, `base`.
-- [ ] You have **internet for first-time setup** (hotel Wi-Fi is fine — you do NOT need internet at the booth afterward).
-
-If any of these aren't true, the demo won't switch images. Check with Benny before continuing.
+- [ ] **Tablet** is RHEL, on the travel-router network as **192.168.8.100**, with the local registry running on port **5000**.
+- [ ] **Toughbooks** are on as **192.168.8.101** and **192.168.8.102**, installed from the kiosk **base** image (`192.168.8.100:5000/bootc-flightgear:base` — the same base the FlightGear demo used).
+- [ ] You have **internet for first-time setup** (hotel Wi-Fi is fine; not needed at the booth afterward).
+- [ ] You have from Benny: `rhokp.tar` (Offline Knowledge Portal image) and the **OKP access key** (sent privately).
 
 ---
 
 ## Step 1 — Get the files
 
-Open a terminal on the tablet and run:
-
     git clone https://github.com/befields/toughbook_demo_webapp.git
     cd toughbook_demo_webapp
 
----
+## Step 2 — Get the controller app image  (pick ONE)
 
-## Step 2 — Get the app image  (pick ONE of A or B)
+**A) Build it** (needs internet): `./deploy/build-image.sh` — wait for `Done`.
 
-**A) Build it yourself** (needs internet, takes a few minutes):
+**B) Benny's prebuilt file**: `podman load -i workload-selector.tar`
 
-    ./deploy/build-image.sh
+Check: `podman images | grep workload-selector` shows one line.
 
-Wait until it prints `Done`.
+## Step 3 — Build the mission images and push them to the registry
 
-**B) Use Benny's prebuilt file** (no internet needed): copy `workload-selector.tar`
-onto the tablet, then:
+    ./missions/build-missions.sh
 
-    podman load -i workload-selector.tar
+This builds 7 small images on top of the `base` image and pushes them to
+`192.168.8.100:5000/bootc-flightgear`. Each is only a few MB on top of base, so it's quick.
 
-**Check it worked** (either way):
+Check:
 
-    podman images | grep workload-selector
+    curl -s http://192.168.8.100:5000/v2/bootc-flightgear/tags/list
 
-You should see one line listing `workload-selector`.
+You should see `cop`, `cuas`, `isr`, `netops`, `sustain`, `cop-degraded`, `home` (plus `base`).
 
----
+> If the `base` image is missing, see `missions/Containerfile.base` (needs a subscribed RHEL host to build).
 
-## Step 3 — Start the app
+## Step 4 — Put the Field Docs image in the registry
+
+    podman load -i rhokp.tar
+    podman tag registry.redhat.io/offline-knowledge-portal/rhokp-rhel9:latest 192.168.8.100:5000/rhokp-rhel9:latest
+    podman push --tls-verify=false 192.168.8.100:5000/rhokp-rhel9:latest
+
+## Step 5 — Load the access key (hidden) and start the controller
+
+Load the key without showing it on screen — paste it and press Enter:
+
+    read -rs OKP_ACCESS_KEY && export OKP_ACCESS_KEY
+
+Start the controller:
 
     podman run -d --name ws --network host \
       -e TARGET_IPS=192.168.8.101,192.168.8.102 \
       -e TARGET_SSH_USER=core -e TARGET_SSH_PASS=edge -e TARGET_BECOME_PASS=edge \
       -e REGISTRY_HOST=192.168.8.100:5000 \
-      -e WORKLOADS=f22,b52,f35,f35-fixed,base \
+      -e OKP_ACCESS_KEY \
       -e PORT=8080 \
       localhost/workload-selector:latest
 
-**Check it's running:**
+(`-e OKP_ACCESS_KEY` with no value copies it from your terminal — it never appears in the command.)
 
-    podman ps
+Check: `podman ps` shows `ws` as `Up`.
 
-You should see a line for `ws` that says `Up`.
+> Redo it? `podman rm -f ws` first, then re-run.
 
-> Changed any addresses/passwords? Edit the `-e` lines above before running.
-> Already ran it once and need to redo it? `podman rm -f ws` first, then re-run.
+## Step 6 — Pre-load Field Docs onto the Toughbooks (do this the night before)
 
----
+The portal image is ~9.5 GB — copy it to both Toughbooks ahead of time so the live tap is fast:
 
-## Step 4 — Check everything is ready (GO / NO-GO)
+    podman exec ws ansible-playbook -i /app/inventory.ini /app/playbooks/okp-prestage.yml
+
+Takes a while per device. Let it finish.
+
+## Step 7 — GO / NO-GO check
 
     WEB_URL=http://localhost:8080/healthz ./deploy/preflight.sh
 
-You want to see **`>> GO`** at the bottom.
+You want **`>> GO`**. A **[FAIL]** line tells you what's wrong. **[SKIP]** on the Ansible line is fine.
 
-- If a line says **[FAIL]**, it tells you what's wrong (network, registry images, or login). Fix that or call Benny.
-- If the Ansible line says **[SKIP]**, that's fine here — it just means Ansible isn't installed on the tablet directly (it lives inside the app). The real test is Step 6.
-
----
-
-## Step 5 — Put the tablet in kiosk mode (full screen, no sleep)
+## Step 8 — Kiosk mode on the tablet
 
     ./deploy/kiosk-setup.sh
 
-Then open Firefox to:
-
-    http://localhost:8080/
-
-You'll see the **Workload Selector** screen with the workload buttons and a
-**Both / Unit 1 / Unit 2** selector at the top.
+Then open Firefox to **http://localhost:8080/**.
 
 ---
 
-## Step 6 — Test the demo (do this once before a customer is watching)
+## Running the demo
 
-On the screen: pick **Both** (or a single unit), then tap a workload like **F22**.
-
-- The black box shows progress.
-- The selected Toughbook(s) switch to that image and reboot.
-- Give it a minute to come back on the new workload.
-
-If that works, you're demo-ready.
-
----
+1. **Pick a target** at the top: ALL UNITS, UNIT 1 or UNIT 2.
+2. **Tap a mission card.** A panel shows *Switch image → Reboot → Mission online*. The Toughbook reboots into that mission (about 1–2 minutes).
+3. **Rollback story:** tap **COP v1.2 (faulty)** — the Toughbook comes up with a stale-data/broken-map COP. Then tap **Tactical COP** — fixed, same device, one tap.
+4. **Field Docs:** tap **DEPLOY** under Field Apps — no reboot. On the Toughbook, tap **DOCS** in the top bar to open Red Hat docs offline.
 
 ## If something breaks
 
-- **Page won't load:** `podman restart ws`  (then refresh the browser)
-- **See what the app is doing:** `podman logs ws`
-- **Re-check readiness:** `WEB_URL=http://localhost:8080/healthz ./deploy/preflight.sh`
-- **A button failed:** the black box shows the real error, and the Toughbook is NOT rebooted. Re-run preflight — it points at the broken piece. Call Benny if stuck.
+- **Controller page won't load:** `podman restart ws`, refresh the browser.
+- **See what it's doing:** `podman logs ws` — or tap **SHOW ANSIBLE OUTPUT** in the panel.
+- **A mission failed:** the panel shows the real error and the Toughbook is NOT rebooted. Re-run preflight.
+- **Field Docs buttons greyed out:** the access key wasn't passed — redo Step 5.
 
----
-
-*Deeper reference (options, auto-start on boot, the host-install alternative) is in `DEPLOY.md`. You don't need it for a standard booth setup.*
+*Deeper reference (host install, auto-start on boot, VM rehearsal) is in `DEPLOY.md`.*

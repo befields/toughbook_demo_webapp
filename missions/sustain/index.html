@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TACEDGE — Sustainment</title>
+<link rel="stylesheet" href="../shared/tacedge.css">
+<script src="../config.js" onerror="void 0"></script>
+<script src="../shared/vendor/milsymbol.js"></script>
+<script src="../shared/vendor/mgrs.min.js"></script>
+<script src="../shared/tacedge.js"></script>
+<style>
+.su{position:absolute;inset:0;display:grid;grid-template-columns:1fr 380px;grid-template-rows:96px 1fr;gap:8px;padding:8px}
+.kp{grid-column:1/3;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.k{padding:12px 14px;display:flex;flex-direction:column;justify-content:center} .k small{font:600 10px var(--mono);color:var(--dim);letter-spacing:.14em}
+.k b{font:700 26px var(--mono);margin-top:4px} .k i{font:11px var(--mono);font-style:normal;color:var(--dim)}
+.grid{overflow:hidden;display:flex;flex-direction:column}
+table{width:100%;border-collapse:separate;border-spacing:4px;font:12px var(--mono);padding:4px 8px}
+th{color:var(--faint);font-weight:600;text-align:center;padding:6px;letter-spacing:.06em;font-size:11px} th:first-child{text-align:left}
+td.u{color:var(--ink);white-space:nowrap;padding-right:10px} td.u small{display:block;color:var(--dim);font-size:10.5px}
+td.c{border-radius:3px;text-align:center;padding:8px 4px;font-weight:700;position:relative;min-width:74px;transition:background .6s}
+td.c.G{background:#0e3a22;color:#7dffb5} td.c.A{background:#3d2c07;color:#ffd27a} td.c.R{background:#4a0f0f;color:#ff9a9a} td.c.B{background:#1a1a1a;color:#777}
+td.c em{display:block;font-style:normal;font-weight:400;font-size:10px;opacity:.8;margin-top:2px}
+.side{display:flex;flex-direction:column;gap:8px;min-height:0}
+.mm{position:relative;height:260px} .mm canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:0 0 4px 4px}
+.req li .s{font-weight:700} .s.p{color:var(--amb)} .s.a{color:var(--grn)} .s.e{color:var(--cyn)}
+.leg{display:flex;gap:14px;padding:8px 12px;font:11px var(--mono);color:var(--dim)} .leg i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-2px}
+</style></head><body>
+<script>
+const body=TE.init({title:'Sustainment · LOGSTAT', version:'LOG v2.2', sub:'BSB / FSC SUPPORT · 24 HR CYCLE', callsign:'PACKHORSE 6'});
+body.innerHTML=`
+<div class="su">
+  <div class="kp">
+    <div class="panel k"><small>OVERALL READINESS</small><b id="kr" style="color:var(--grn)">86%</b><i>C-RATING · C2</i></div>
+    <div class="panel k"><small>CLASS III (FUEL) DOS</small><b id="kf" style="color:var(--amb)">1.8</b><i>DAYS OF SUPPLY</i></div>
+    <div class="panel k"><small>CLASS V (AMMO) DOS</small><b id="ka" style="color:var(--grn)">3.2</b><i>DAYS OF SUPPLY</i></div>
+    <div class="panel k"><small>CLASS I (WATER) DOS</small><b id="kw" style="color:var(--grn)">2.6</b><i>DAYS OF SUPPLY</i></div>
+    <div class="panel k"><small>CONVOYS EN ROUTE</small><b id="kc" style="color:var(--cyn)">2</b><i id="keta">NEXT ETA 0:42</i></div>
+  </div>
+  <div class="panel grid"><h3>LOGSTAT BY UNIT <em id="asof"></em></h3>
+    <table><thead><tr><th>UNIT</th><th>CL I<br>FOOD/H2O</th><th>CL II<br>GEN SUP</th><th>CL III<br>FUEL</th><th>CL IV<br>BARRIER</th><th>CL V<br>AMMO</th><th>CL VIII<br>MEDICAL</th><th>CL IX<br>PARTS</th><th>PERS</th></tr></thead><tbody id="tb"></tbody></table>
+    <div class="leg"><span><i style="background:#0e3a22"></i>GREEN ≥ 80%</span><span><i style="background:#3d2c07"></i>AMBER 60–79%</span><span><i style="background:#4a0f0f"></i>RED &lt; 60%</span><span><i style="background:#1a1a1a"></i>N/A</span></div></div>
+  <div class="side">
+    <div class="panel"><h3>CONVOY TRACKER <em>CLP 26-04</em></h3><div class="mm"><canvas id="mc"></canvas></div></div>
+    <div class="panel" style="flex:1;min-height:0;overflow:hidden"><h3>SUPPORT REQUESTS</h3><ul class="list req" id="rq"></ul></div>
+    <div class="panel" style="height:150px;display:flex;flex-direction:column"><h3>LOG EVENTS</h3><div class="log" id="log"></div></div>
+  </div>
+</div>`;
+const R=TE.rng(61), logEl=document.getElementById('log');
+const units=[['TF 1-64 AR HQ','LANCER'],['A CO (ARMOR)','APACHE'],['B CO (MECH)','BULLDOG'],['C CO (ARMOR)','COMANCHE'],['SCT PLT','SABER'],['B BTRY 3-82 FA','STEEL'],['FSC','PACKHORSE']];
+const cls=8; const data=units.map((u,i)=>Array.from({length:cls},(_,j)=>(j===3&&i===4)?null:Math.round(55+R()*45)));
+data[3][2]=52; data[1][2]=64; data[2][4]=71; data[3][6]=58; data[5][4]=88;
+const tb=document.getElementById('tb');
+const band=v=>v==null?'B':v>=80?'G':v>=60?'A':'R';
+function render(){ tb.innerHTML=units.map((u,i)=>'<tr><td class="u">'+u[0]+'<small>'+u[1]+'</small></td>'+data[i].map((v,j)=>'<td class="c '+band(v)+'">'+(v==null?'N/A':v+'%')+
+  (v!=null&&j===2?'<em>'+Math.round(v*42)+' GAL</em>':v!=null&&j===4?'<em>'+(v>=80?'BASIC LOAD':'BELOW BL')+'</em>':v!=null&&j===7?'<em>'+Math.max(0,Math.round((100-v)/9))+' NMC</em>':'')+'</td>').join('')+'</tr>').join('');
+  const all=data.flat().filter(v=>v!=null), avg=Math.round(all.reduce((a,b)=>a+b,0)/all.length); const kr=document.getElementById('kr'); kr.textContent=avg+'%'; kr.style.color=avg>=80?'var(--grn)':'var(--amb)';
+  const f=data.map(r=>r[2]).reduce((a,b)=>a+b,0)/units.length; document.getElementById('kf').textContent=(f/38).toFixed(1); document.getElementById('kf').style.color=f/38<2?'var(--amb)':'var(--grn)';
+  document.getElementById('asof').textContent='AS OF '+TE.dtg(); }
+// requests
+const rq=document.getElementById('rq');
+const reqs=[{u:'C CO',t:'CL III — 2,400 GAL JP-8',p:'PRIORITY',s:'p'},{u:'C CO',t:'CL IX — 2x ROADWHEEL ARM, M1A2',p:'URGENT',s:'p'},{u:'B CO',t:'CL V — 25MM HEI-T, 4 PALLETS',p:'ROUTINE',s:'a'},{u:'SCT',t:'CL I — H2O 600 GAL',p:'ROUTINE',s:'e'},{u:'A CO',t:'CL VIII — CLS RESUPPLY KIT x6',p:'PRIORITY',s:'a'}];
+function rr(){ rq.innerHTML=reqs.map(r=>'<li><span><span style="color:var(--ink)">'+r.u+'</span> · '+r.t+'<br><span class="k">'+r.p+'</span></span><span class="s '+r.s+'">'+({p:'PENDING',a:'APPROVED',e:'EN ROUTE'})[r.s]+'</span></li>').join(''); }
+// convoy mini map
+const mc=document.getElementById('mc'), M=mc.getContext('2d'), T=TE.Terrain(11); let MW,MH,bg;
+const route=[[-11500,-6800],[-9800,-6200],[-8200,-5100],[-7400,-3600],[-6900,-2200]];
+function mres(){ const r=mc.getBoundingClientRect(), d=Math.min(devicePixelRatio||1,2); MW=r.width; MH=r.height; mc.width=MW*d; mc.height=MH*d; M.setTransform(d,0,0,d,0,0);
+  bg=document.createElement('canvas'); bg.width=MW; bg.height=MH; T.render(bg.getContext('2d'),MW,MH,{cx:-9200,cy:-4500,mpp:6000/MW},{scale:.5,tint:'rgba(0,20,10,.2)'}); }
+const ms2=(x,y)=>[MW/2+(x+9200)/(6000/MW), MH/2-(y+4500)/(6000/MW)];
+let ct=.35;
+function mframe(){ M.clearRect(0,0,MW,MH); M.drawImage(bg,0,0,MW,MH);
+  M.strokeStyle='rgba(56,214,255,.8)'; M.lineWidth=3; M.setLineDash([8,5]); M.beginPath(); route.forEach((p,i)=>{const s=ms2(...p); i?M.lineTo(s[0],s[1]):M.moveTo(s[0],s[1]);}); M.stroke(); M.setLineDash([]);
+  M.font='700 10px monospace'; M.fillStyle='#9fe7ff'; const a=ms2(...route[0]); M.fillText('BSA',a[0]+6,a[1]+4); const b=ms2(...route[4]); M.fillText('LRP 2',b[0]+8,b[1]); M.fillText('MSR CACTUS',ms2(-8600,-5900)[0],ms2(-8600,-5900)[1]);
+  ct=(ct+.0004)%1; const n=route.length-1, k=Math.floor(ct*n), f=ct*n-k, p=route[k], q=route[k+1], s=ms2(TE.lerp(p[0],q[0],f),TE.lerp(p[1],q[1],f));
+  const sy=TE.sym('SFGPUSS----D---',18,{}); M.drawImage(sy.c,s[0]-sy.a.x,s[1]-sy.a.y);
+  M.fillStyle='rgba(4,8,8,.8)'; M.fillRect(8,MH-46,210,38); M.fillStyle='#cfe3d8'; M.fillText('CLP 26-04 · 9 VEH · '+Math.round(ct*100)+'% OF ROUTE',14,MH-30);
+  M.fillStyle='#ffb020'; M.fillText('ETA LRP 2: '+Math.max(1,Math.round((1-ct)*70))+' MIN',14,MH-15);
+  document.getElementById('keta').textContent='NEXT ETA 0:'+String(Math.max(1,Math.round((1-ct)*70))).padStart(2,'0');
+  requestAnimationFrame(mframe); }
+const evs=[['C CO CL III RED (52%) — EMERGENCY RESUPPLY REQUESTED','r'],['CLP 26-04 CHECKPOINT 3 PASSED, NO CONTACT','c'],['B BTRY UPLOADED CL V — 88% BASIC LOAD','g'],
+  ['PREDICTIVE: A CO FUEL RED IN ~9 HRS AT CURRENT OPTEMPO','w'],['FSC: 2x HEMTT FUELER NMC — RECOVERY DISPATCHED','w'],['BDE S4: LOGSTAT SUBMITTED (LOCAL CACHE, SYNC PENDING)','c']];
+let ei=0; setInterval(()=>{ const e=evs[ei++%evs.length]; TE.log(logEl,e[0],e[1]);
+  data.forEach(r=>r.forEach((v,j)=>{ if(v!=null&&R()<.25) r[j]=TE.clamp(v+(j===2?-1:Math.round((R()-.55)*3)),40,100); }));
+  if(ei%3===0){ const r=reqs.find(x=>x.s==='p'); if(r){ r.s='a'; TE.log(logEl,'APPROVED: '+r.u+' '+r.t,'g'); } else reqs.forEach(x=>{ if(x.s==='a') x.s='e'; }); rr(); }
+  render(); },6000);
+window.addEventListener('resize',()=>{ mres(); }); render(); rr(); mres(); TE.log(logEl,'LOGSTAT CYCLE OPEN — 7 UNITS REPORTING','g'); requestAnimationFrame(mframe);
+</script></body></html>

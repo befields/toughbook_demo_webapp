@@ -1,0 +1,14 @@
+---
+- name: Remove Field Docs (Red Hat Offline Knowledge Portal)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tasks:
+    - name: Stop and remove the portal container (image stays cached on the device)
+      ansible.builtin.command: podman rm -f rhokp
+      register: rm
+      changed_when: "'rhokp' in rm.stdout"
+      failed_when: false
+    - name: Report
+      ansible.builtin.debug:
+        msg: "Field Docs removed from this device."

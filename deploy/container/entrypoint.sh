@@ -23,6 +23,6 @@ chmod 600 /app/inventory.ini
 
 echo ">> Workload Selector starting"
 echo "   targets=${TARGET_IPS}  registry=${REGISTRY_HOST:-192.168.8.100:5000}  port=${PORT}"
-echo "   workloads=${WORKLOADS:-f22,b52,f35,f35-fixed,base}"
+echo "   workloads=${WORKLOADS:-default mission catalog}  mock=${MOCK_MODE:-false}  field-docs=$([ -n "${OKP_ACCESS_KEY:-}" ] && echo enabled || echo disabled)"
 
 exec gunicorn --workers 3 --timeout 300 --bind "0.0.0.0:${PORT}" app:app

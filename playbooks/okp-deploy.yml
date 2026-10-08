@@ -1,0 +1,42 @@
+---
+# Deploy the Red Hat Offline Knowledge Portal as a container on the Toughbook(s).
+# No reboot: the mission OS (image mode) stays as-is; this adds an application.
+# The access key comes from the controller's OKP_ACCESS_KEY environment variable
+# and is never written to disk or shown in output.
+- name: Deploy Field Docs (Red Hat Offline Knowledge Portal)
+  hosts: all
+  gather_facts: no
+  become: yes
+  vars:
+    okp_image: "192.168.8.100:5000/rhokp-rhel9:latest"
+    okp_port: 8090
+  tasks:
+    - name: Check whether the portal image is already on the device (pre-staged)
+      ansible.builtin.command: podman image exists {{ okp_image }}
+      register: okp_img
+      failed_when: false
+      changed_when: false
+
+    - name: Pull the portal image from the local registry (only if not pre-staged)
+      ansible.builtin.command: podman pull --tls-verify=false {{ okp_image }}
+      when: okp_img.rc != 0
+
+    - name: Start the portal container
+      ansible.builtin.command: >-
+        podman run -d --replace --name rhokp --restart=always
+        -p {{ okp_port }}:8080 -e ACCESS_KEY={{ lookup('env', 'OKP_ACCESS_KEY') }}
+        {{ okp_image }}
+      no_log: true
+
+    - name: Wait for the portal to answer on localhost
+      ansible.builtin.uri:
+        url: "http://localhost:{{ okp_port }}/"
+        status_code: 200
+      register: okp_up
+      until: okp_up.status == 200
+      retries: 30
+      delay: 3
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: "Field Docs running on this device at http://localhost:{{ okp_port }}/ (tap DOCS in the mission app)"

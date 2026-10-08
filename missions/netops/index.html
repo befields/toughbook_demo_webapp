@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TACEDGE — Tactical Network</title>
+<link rel="stylesheet" href="../shared/tacedge.css">
+<script src="../config.js" onerror="void 0"></script>
+<script src="../shared/vendor/milsymbol.js"></script>
+<script src="../shared/vendor/mgrs.min.js"></script>
+<script src="../shared/tacedge.js"></script>
+<style>
+.no{position:absolute;inset:0;display:grid;grid-template-columns:1fr 360px;grid-template-rows:1fr 170px;gap:8px;padding:8px}
+.graph{position:relative;border:1px solid var(--line2);border-radius:4px;overflow:hidden;background:radial-gradient(circle at 40% 45%,#0b1a1c,#05090a 75%)}
+.graph canvas{position:absolute;inset:0;width:100%;height:100%}
+.side{display:flex;flex-direction:column;gap:8px;min-height:0;grid-row:1/3;grid-column:2}
+.wan{display:flex;gap:10px;align-items:center;padding:12px;font:700 13px var(--mono);letter-spacing:.08em}
+.wan .big{font-size:22px} .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.kpi{padding:10px 12px} .kpi small{display:block;font:600 10px var(--mono);color:var(--dim);letter-spacing:.14em} .kpi b{font:700 22px var(--mono)} .kpi canvas{width:100%;height:46px;display:block;margin-top:6px}
+.lt td,.lt th{font:11.5px var(--mono);padding:5px 8px;border-bottom:1px solid #0f1b1d;text-align:left;white-space:nowrap} .lt th{color:var(--faint)} .lt{width:100%;border-collapse:collapse}
+.q{font-weight:700} .q.g{color:var(--grn)} .q.a{color:var(--amb)} .q.r{color:var(--red)}
+.svc li span:last-child{color:var(--grn);font-weight:700}
+</style></head><body>
+<script>
+const body=TE.init({title:'Tactical Network Operations', version:'NETOPS v3.1', sub:'BDE MESH · DDIL MODE', callsign:'SPARKY 6'});
+body.innerHTML=`
+<div class="no">
+  <div class="graph" id="g"><canvas id="gc"></canvas></div>
+  <div class="kpis">
+    <div class="panel kpi"><small>MESH NODES</small><b id="k1">11/12</b><canvas id="s1"></canvas></div>
+    <div class="panel kpi"><small>AGG THROUGHPUT</small><b id="k2">38.4 Mb</b><canvas id="s2"></canvas></div>
+    <div class="panel kpi"><small>MEDIAN LATENCY</small><b id="k3">42 ms</b><canvas id="s3"></canvas></div>
+    <div class="panel kpi"><small>PACKET LOSS</small><b id="k4">0.8 %</b><canvas id="s4"></canvas></div>
+  </div>
+  <div class="side">
+    <div class="panel"><div class="wan" id="wan"></div></div>
+    <div class="panel"><h3>LOCAL EDGE SERVICES <em>ON-DEVICE</em></h3><ul class="list svc">
+      <li><span>MISSION APP (THIS IMAGE)</span><span>RUNNING</span></li><li><span>TRACK STORE / CACHE</span><span>RUNNING</span></li>
+      <li><span>CHAT / MSG RELAY</span><span>RUNNING</span></li><li><span>FIELD DOCS (OKP)</span><span id="okp">CHECKING</span></li></ul></div>
+    <div class="panel" style="flex:1;min-height:0;overflow:hidden"><h3>LINKS</h3><table class="lt"><thead><tr><th>LINK</th><th>TYPE</th><th>SNR</th><th>Mb/s</th><th>QUAL</th></tr></thead><tbody id="lt"></tbody></table></div>
+    <div class="panel" style="height:170px;display:flex;flex-direction:column"><h3>NETWORK EVENTS</h3><div class="log" id="log"></div></div>
+  </div>
+</div>`;
+const R=TE.rng(31), g=document.getElementById('g'), gc=document.getElementById('gc'), X=gc.getContext('2d'); let W,H,DPR;
+const N=[
+ {id:'BDE MAIN',t:'CP',x:.12,y:.5,sidc:'SFGPUH----B----'},{id:'BN TAC',t:'CP',x:.33,y:.36,sidc:'SFGPUCA---AF---'},
+ {id:'A CO',t:'VEH',x:.55,y:.22},{id:'B CO',t:'VEH',x:.58,y:.52},{id:'C CO',t:'VEH',x:.5,y:.78},
+ {id:'1-2 SQD',t:'DMT',x:.78,y:.16},{id:'2-1 SQD',t:'DMT',x:.8,y:.42},{id:'3-2 SQD',t:'DMT',x:.76,y:.7},
+ {id:'RELAY UAS',t:'AIR',x:.66,y:.08},{id:'SATCOM TERM',t:'SAT',x:.16,y:.2},{id:'FIRES BTRY',t:'VEH',x:.24,y:.76},{id:'THIS DEVICE',t:'TB',x:.42,y:.58,me:1}];
+const Ln=[[0,1,'HC-LOS'],[0,9,'SATCOM'],[0,10,'HC-LOS'],[1,2,'MANET'],[1,3,'MANET'],[1,11,'MANET'],[3,11,'MANET'],[4,11,'MANET'],[2,5,'MANET'],[3,6,'MANET'],[4,7,'MANET'],[8,5,'RELAY'],[8,2,'RELAY'],[8,6,'RELAY'],[10,4,'HC-LOS'],[2,3,'MANET'],[7,6,'MANET']]
+ .map(([a,b,t])=>({a,b,t,q:.75+R()*.2,mb:+(2+R()*9).toFixed(1),snr:Math.round(14+R()*16),down:0}));
+const pk=[];
+function resize(){ const r=g.getBoundingClientRect(); DPR=Math.min(devicePixelRatio||1,2); W=r.width; H=r.height; gc.width=W*DPR; gc.height=H*DPR; X.setTransform(DPR,0,0,DPR,0,0); }
+const P=n=>[40+n.x*(W-80),30+n.y*(H-60)];
+const qc=q=>q>.7?'77,255,154':q>.45?'255,176,32':'255,59,59';
+function icon(n,x,y){
+  X.save(); X.translate(x,y);
+  const col=n.me?'#4dff9a':'#38d6ff'; X.strokeStyle=col; X.fillStyle='rgba(8,20,22,.95)'; X.lineWidth=2;
+  if(n.t==='CP'){ X.beginPath(); X.rect(-16,-11,32,22); X.fill(); X.stroke(); X.beginPath(); X.moveTo(-16,-11); X.lineTo(-16,-24); X.stroke(); }
+  else if(n.t==='SAT'){ X.beginPath(); X.arc(0,0,13,0,7); X.fill(); X.stroke(); X.beginPath(); X.arc(0,4,9,Math.PI*1.1,Math.PI*1.9); X.stroke(); X.beginPath(); X.moveTo(0,4); X.lineTo(5,-6); X.stroke(); }
+  else if(n.t==='AIR'){ X.beginPath(); X.moveTo(0,-12); X.lineTo(14,8); X.lineTo(-14,8); X.closePath(); X.fill(); X.stroke(); }
+  else if(n.t==='DMT'){ X.beginPath(); X.arc(0,0,10,0,7); X.fill(); X.stroke(); }
+  else if(n.t==='TB'){ X.shadowColor='#4dff9a'; X.shadowBlur=16; X.beginPath(); X.rect(-15,-10,30,20); X.fill(); X.stroke(); X.shadowBlur=0; X.strokeRect(-11,-6,22,12); }
+  else { X.beginPath(); X.rect(-14,-9,28,18); X.fill(); X.stroke(); X.beginPath(); X.ellipse(0,0,8,4,0,0,7); X.stroke(); }
+  X.restore(); X.font='700 11px monospace'; X.textAlign='center'; X.fillStyle=n.me?'#4dff9a':'#cfe3d8'; X.fillText(n.id,x,y+(n.t==='CP'?26:24)); X.textAlign='left';
+}
+function frame(){
+  X.clearRect(0,0,W,H); const now=performance.now()/1000;
+  // faint grid
+  X.strokeStyle='rgba(56,214,255,.05)'; X.lineWidth=1; for(let x=0;x<W;x+=40){X.beginPath();X.moveTo(x,0);X.lineTo(x,H);X.stroke();} for(let y=0;y<H;y+=40){X.beginPath();X.moveTo(0,y);X.lineTo(W,y);X.stroke();}
+  Ln.forEach(l=>{ const [x1,y1]=P(N[l.a]), [x2,y2]=P(N[l.b]);
+    if(l.down){ X.setLineDash([4,6]); X.strokeStyle='rgba(255,59,59,.55)'; X.lineWidth=1.5; } else { X.setLineDash(l.t==='SATCOM'?[10,6]:l.t==='RELAY'?[2,5]:[]); X.strokeStyle='rgba('+qc(l.q)+','+(.25+l.q*.45)+')'; X.lineWidth=1+l.q*3; }
+    X.beginPath(); X.moveTo(x1,y1); X.lineTo(x2,y2); X.stroke(); X.setLineDash([]);
+    if(!l.down && R()<.06*l.q) pk.push({l,t:0,d:R()<.5?1:-1}); });
+  for(let i=pk.length-1;i>=0;i--){ const p=pk[i]; p.t+=.018; if(p.t>=1||p.l.down){ pk.splice(i,1); continue; }
+    const [x1,y1]=P(N[p.l.a]), [x2,y2]=P(N[p.l.b]); const f=p.d>0?p.t:1-p.t; const x=TE.lerp(x1,x2,f), y=TE.lerp(y1,y2,f);
+    X.fillStyle='rgba('+qc(p.l.q)+',.95)'; X.beginPath(); X.arc(x,y,2.6,0,7); X.fill(); }
+  N.forEach(n=>{ const [x,y]=P(n); if(n.off){ X.globalAlpha=.35; } icon(n,x,y); X.globalAlpha=1;
+    if(n.me){ X.strokeStyle='rgba(77,255,154,'+(.4-.4*((now%2)/2))+')'; X.lineWidth=2; X.beginPath(); X.arc(x,y,24+((now%2)/2)*30,0,7); X.stroke(); } });
+  requestAnimationFrame(frame);
+}
+// sparklines
+const series=[[],[],[],[]]; for(let i=0;i<40;i++){ series[0].push(11); series[1].push(36+R()*6); series[2].push(40+R()*8); series[3].push(R()*1.4); }
+function spark(id,arr,col,max){ const c=document.getElementById(id), r=c.getBoundingClientRect(), d=Math.min(devicePixelRatio||1,2); c.width=r.width*d; c.height=r.height*d;
+  const x=c.getContext('2d'); x.scale(d,d); const w=r.width,h=r.height; x.strokeStyle=col; x.lineWidth=1.6; x.beginPath();
+  arr.forEach((v,i)=>{ const px=i/(arr.length-1)*w, py=h-2-(v/max)*(h-4); i?x.lineTo(px,py):x.moveTo(px,py); }); x.stroke();
+  x.lineTo(w,h); x.lineTo(0,h); x.closePath(); x.fillStyle=col.replace('1)','.12)'); x.fill(); }
+let wanUp=false, lt=document.getElementById('lt'), logEl=document.getElementById('log');
+function wan(){ document.getElementById('wan').innerHTML = wanUp
+  ? '<span class="te-dot"></span><span><span class="big" style="color:var(--grn)">WAN: CONNECTED</span><br><span style="color:var(--dim);font-size:11px">SATCOM REACHBACK AVAILABLE</span></span>'
+  : '<span class="te-dot amb"></span><span><span class="big" style="color:var(--amb)">WAN: DISCONNECTED</span><br><span style="color:var(--dim);font-size:11px">DDIL — LOCAL MISSION SERVICES NOMINAL</span></span>';
+  TE.setNet(wanUp?'MESH 11/12 · WAN':'MESH 11/12 · DDIL', wanUp?'':'amb'); }
+function table(){ lt.innerHTML=Ln.slice(0,12).map(l=>{ const q=l.down?0:l.q, c=q>.7?'g':q>.45?'a':'r';
+  return '<tr><td>'+N[l.a].id.split(' ')[0]+'↔'+N[l.b].id.split(' ')[0]+'</td><td>'+l.t+'</td><td>'+(l.down?'—':l.snr+' dB')+'</td><td>'+(l.down?'0.0':l.mb)+'</td><td class="q '+c+'">'+(l.down?'DOWN':Math.round(q*100)+'%')+'</td></tr>'; }).join(''); }
+const evs=[
+ ()=>{ const l=Ln[9]; l.down=1; TE.log(logEl,'LINK B CO↔2-1 SQD LOST — REROUTING VIA RELAY UAS','r'); setTimeout(()=>{ l.down=0; TE.log(logEl,'LINK B CO↔2-1 SQD RESTORED (SNR 21 dB)','g'); },14000); },
+ ()=>{ wanUp=!wanUp; wan(); TE.log(logEl, wanUp?'SATCOM REACHBACK RESTORED — SYNCING DELTAS TO BDE':'SATCOM LOST — OPERATING DISCONNECTED (DDIL), LOCAL SERVICES UP', wanUp?'g':'w'); },
+ ()=>{ const l=Ln[3]; l.q=.42; TE.log(logEl,'BN TAC↔A CO DEGRADED — INTERFERENCE ON CH 7, HOPPING','w'); setTimeout(()=>{ l.q=.86; TE.log(logEl,'BN TAC↔A CO NOMINAL ON CH 12','g'); },10000); },
+ ()=>TE.log(logEl,'POLICY PUSH: QoS PROFILE "FIRES-PRIORITY" APPLIED TO 11 NODES','c'),
+ ()=>{ const n=N[7]; n.off=1; TE.log(logEl,'NODE 3-2 SQD UNREACHABLE (LAST HEARD 40s)','w'); setTimeout(()=>{ n.off=0; TE.log(logEl,'NODE 3-2 SQD REJOINED MESH','g'); },9000); },
+];
+let ei=0; setInterval(()=>evs[ei++%evs.length](),7000);
+setInterval(()=>{ Ln.forEach(l=>{ if(!l.down){ l.q=TE.clamp(l.q+(R()-.5)*.05,.4,.97); l.mb=+TE.clamp(l.mb+(R()-.5)*1.2,.8,14).toFixed(1); l.snr=Math.round(TE.clamp(l.snr+(R()-.5)*2,8,32)); } });
+  const up=Ln.filter(l=>!l.down), tp=up.reduce((a,l)=>a+l.mb,0), nodes=12-N.filter(n=>n.off).length;
+  [nodes,tp,38+R()*12+(wanUp?0:4),(Ln.some(l=>l.down)?2.4:.4)+R()*.8].forEach((v,i)=>{ series[i].push(v); series[i].shift(); });
+  document.getElementById('k1').textContent=nodes+'/12'; document.getElementById('k2').textContent=tp.toFixed(1)+' Mb'; document.getElementById('k3').textContent=Math.round(series[2][39])+' ms'; document.getElementById('k4').textContent=series[3][39].toFixed(1)+' %';
+  spark('s1',series[0],'rgba(77,255,154,1)',12); spark('s2',series[1],'rgba(56,214,255,1)',80); spark('s3',series[2],'rgba(255,176,32,1)',100); spark('s4',series[3],'rgba(255,59,59,1)',5); table(); },1000);
+fetch('http://localhost:8090/',{mode:'no-cors'}).then(()=>{document.getElementById('okp').textContent='RUNNING';}).catch(()=>{const e=document.getElementById('okp'); e.textContent='NOT DEPLOYED'; e.style.color='var(--faint)';});
+window.addEventListener('resize',resize); resize(); wan(); table(); TE.log(logEl,'NETOPS AGENT STARTED — 12 NODES DISCOVERED','g'); requestAnimationFrame(frame);
+</script></body></html>

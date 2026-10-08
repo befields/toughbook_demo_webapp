@@ -1,276 +1,199 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workload Selector</title>
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #282c34;
-            color: #61dafb;
-        }
-
-        .button {
-            width: 200px;
-            height: 50px;
-            font-size: 18px;
-            margin: 10px;
-            cursor: pointer;
-            background-color: #007BFF;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            transition: background-color 0.3s ease;
-        }
-
-        .button:hover {
-            background-color: #0056b3;
-        }
-	.red-button {
-            background-color: #FE2712;
-        }
-
-        .red-button:hover {
-            background-color: #B82214;
-        }
-
-        .green-button {
-            background-color: #58B814;
-        }
-
-        .green-button:hover {
-            background-color: #3E810E;
-        }
-
-        .target-select {
-            margin-bottom: 10px;
-        }
-
-        .target {
-            font-size: 15px;
-            padding: 8px 18px;
-            margin: 4px;
-            cursor: pointer;
-            background-color: #3a3f4b;
-            color: #9aa0ab;
-            border: 1px solid #555;
-            border-radius: 20px;
-        }
-
-        .target.active {
-            background-color: #61dafb;
-            color: #282c34;
-            border-color: #61dafb;
-            font-weight: bold;
-        }
-
-        .loading {
-            font-size: 24px;
-            margin-top: 20px;
-            color: #61dafb;
-            display: none;
-        }
-
-        .terminal {
-            width: 80%;
-            max-width: 800px;
-            height: 300px;
-            background-color: #000000;
-            color: #00ff00;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 14px;
-            margin-top: 20px;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #00ff00;
-            resize: none;
-            overflow-y: scroll;
-            white-space: pre-wrap;
-        }
-
-        @media (max-width: 768px) {
-            .terminal {
-                width: 90%;
-                height: 200px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .terminal {
-                width: 95%;
-                height: 150px;
-            }
-        }
-
-        /* Progress bar styles */
-        .progress-container {
-            width: 80%;
-            max-width: 800px;
-            background-color: #ddd;
-            border-radius: 5px;
-            margin-top: 20px;
-            display: none; /* Initially hidden */
-        }
-
-        .progress-bar {
-            width: 0%;
-            height: 30px;
-            background-color: #4caf50;
-            border-radius: 5px;
-            transition: width 1s linear;
-        }
-    </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TACEDGE Mission Controller</title>
+<style>
+:root{--bg:#06080a;--p:#0d1216;--p2:#121a1f;--ln:#1e2a31;--ln2:#2b3b44;--ink:#e6eef0;--dim:#8a9aa2;--fa:#55656d;
+  --red:#ee0000;--red2:#ff4b4b;--grn:#3ddc84;--amb:#ffb020;--cyn:#38d6ff;--mono:"DejaVu Sans Mono","Liberation Mono",Menlo,Consolas,monospace;
+  --sans:"Red Hat Display","Red Hat Text","Noto Sans","DejaVu Sans",system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-tap-highlight-color:transparent}
+body{background:radial-gradient(900px 500px at 0% -10%,rgba(238,0,0,.16),transparent 60%),radial-gradient(700px 400px at 100% 110%,rgba(56,214,255,.08),transparent 60%),
+  linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px) 0 0/40px 40px,linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px) 0 0/40px 40px,var(--bg);background-attachment:fixed}
+button{font:inherit;color:inherit}
+.top{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--ln);background:rgba(6,8,10,.75);backdrop-filter:blur(6px);position:sticky;top:0;z-index:5}
+.logo{display:flex;align-items:center;gap:12px}
+.logo svg{width:34px;height:34px;filter:drop-shadow(0 0 10px rgba(238,0,0,.5))}
+.logo b{display:block;font:800 18px var(--sans);letter-spacing:.22em}
+.logo small{display:block;font:11px var(--mono);color:var(--dim);letter-spacing:.12em}
+.pills{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{font:600 11px var(--mono);letter-spacing:.08em;padding:6px 10px;border:1px solid var(--ln2);border-radius:999px;color:var(--dim);background:rgba(18,26,31,.7)}
+.pill i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--grn);box-shadow:0 0 8px var(--grn);vertical-align:1px}
+.pill.w i{background:var(--amb);box-shadow:0 0 8px var(--amb)} .pill.r i{background:var(--red2);box-shadow:0 0 8px var(--red2)}
+.clock{font:700 14px var(--mono);letter-spacing:.08em;padding-left:6px}
+main{padding:18px 22px 120px;max-width:1500px;margin:0 auto}
+.sec{margin:6px 0 22px}
+.sec h2{display:flex;align-items:baseline;gap:12px;margin:0 0 12px;font:700 13px var(--mono);letter-spacing:.2em;color:var(--dim)}
+.sec h2 span{font:500 12px var(--sans);letter-spacing:.02em;color:var(--fa)}
+.sec h2:before{content:"";width:4px;height:14px;background:var(--red);align-self:center;box-shadow:0 0 10px var(--red)}
+/* units */
+.units{display:grid;grid-template-columns:200px repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.unit{position:relative;text-align:left;cursor:pointer;background:linear-gradient(180deg,var(--p2),var(--p));border:1px solid var(--ln);border-radius:12px;padding:14px 16px;transition:.2s}
+.unit.sel{border-color:var(--red);box-shadow:0 0 0 1px var(--red),0 0 28px rgba(238,0,0,.25)}
+.unit .n{font:800 16px var(--sans);letter-spacing:.06em} .unit .ip{font:12px var(--mono);color:var(--dim);margin-top:2px}
+.unit .cur{margin-top:10px;font:12px var(--mono);color:var(--dim)} .unit .cur b{color:var(--ink)}
+.unit .st{position:absolute;top:14px;right:14px;font:700 10.5px var(--mono);letter-spacing:.1em;padding:4px 8px;border-radius:6px;border:1px solid var(--ln2);color:var(--dim)}
+.st.ready{color:var(--grn);border-color:#1d5a37} .st.busy{color:var(--amb);border-color:#6a4a10} .st.err{color:var(--red2);border-color:#6a1a1a}
+.unit.all{display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
+.unit.all .n{font-size:15px} .unit.all small{font:12px var(--mono);color:var(--dim);margin-top:4px}
+/* missions */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.card{position:relative;text-align:left;cursor:pointer;border-radius:14px;padding:1px;background:linear-gradient(140deg,var(--ln2),var(--ln) 40%,var(--ln));transition:transform .15s}
+.card:hover,.card:focus-visible{background:linear-gradient(140deg,var(--red),#7a1010 35%,var(--ln2) 70%)}
+.card:active{transform:scale(.985)}
+.card .in{height:100%;border-radius:13px;padding:16px 16px 14px;background:linear-gradient(180deg,#111a1f,#0b1013);display:flex;flex-direction:column;gap:8px;min-height:168px}
+.card .ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:radial-gradient(circle at 30% 30%,rgba(238,0,0,.35),rgba(238,0,0,.08));border:1px solid rgba(238,0,0,.35)}
+.card .ic svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card .t{font:800 17px var(--sans);letter-spacing:.02em}
+.card .d{font:13px/1.4 var(--sans);color:var(--dim);flex:1}
+.card .f{display:flex;justify-content:space-between;align-items:center;font:11px var(--mono);color:var(--fa);letter-spacing:.06em}
+.card .v{color:var(--cyn)}
+.card.fault .ic{background:radial-gradient(circle at 30% 30%,rgba(255,176,32,.35),rgba(255,176,32,.06));border-color:rgba(255,176,32,.45)}
+.card.fault:after{content:"FAULTY BUILD · DEMO";position:absolute;top:12px;right:12px;font:700 9.5px var(--mono);letter-spacing:.1em;color:#1a1000;background:repeating-linear-gradient(45deg,#ffb020 0 8px,#e09000 8px 16px);padding:3px 7px;border-radius:4px}
+.card.home .ic{background:radial-gradient(circle at 30% 30%,rgba(61,220,132,.3),rgba(61,220,132,.06));border-color:rgba(61,220,132,.4)}
+.card.active .in{box-shadow:inset 0 0 0 1px var(--grn),0 0 24px rgba(61,220,132,.18)}
+.card.active:after{content:"● ACTIVE";position:absolute;top:12px;right:12px;font:700 9.5px var(--mono);letter-spacing:.1em;color:#03140a;background:var(--grn);padding:3px 7px;border-radius:4px}
+.busy .card,.busy .apps button{pointer-events:none;opacity:.55}
+/* field apps */
+.apps{display:grid;grid-template-columns:minmax(300px,1fr);gap:14px}
+.app{display:flex;gap:16px;align-items:center;border:1px solid var(--ln);border-radius:14px;padding:16px;background:linear-gradient(90deg,rgba(238,0,0,.07),transparent 40%),var(--p)}
+.app .ic{width:54px;height:54px;flex:0 0 54px;border-radius:12px;display:grid;place-items:center;background:#1a0606;border:1px solid rgba(238,0,0,.45)}
+.app .ic svg{width:28px;height:28px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.app .t{font:800 17px var(--sans)} .app .d{font:13px var(--sans);color:var(--dim);margin-top:3px}
+.app .acts{margin-left:auto;display:flex;gap:8px}
+.btn{cursor:pointer;border:1px solid var(--ln2);background:var(--p2);border-radius:10px;padding:11px 16px;font:700 12px var(--mono);letter-spacing:.1em}
+.btn.pri{background:linear-gradient(180deg,#ff2a2a,#c80000);border-color:#ff5050;box-shadow:0 6px 20px rgba(238,0,0,.3)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+/* run panel */
+.run{position:fixed;left:50%;bottom:18px;transform:translate(-50%,140%);width:min(820px,calc(100% - 28px));z-index:20;transition:transform .35s cubic-bezier(.2,.9,.2,1);
+  background:rgba(12,17,20,.96);border:1px solid var(--ln2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.6);backdrop-filter:blur(8px)}
+.run.on{transform:translate(-50%,0)}
+.run .hd{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--ln)}
+.run .hd b{font:800 15px var(--sans)} .run .hd .el{margin-left:auto;font:700 13px var(--mono);color:var(--dim)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px 16px}
+.step{border:1px solid var(--ln);border-radius:10px;padding:10px 12px;font:12px var(--mono);color:var(--fa)}
+.step b{display:block;font:700 12.5px var(--sans);color:var(--dim);margin-bottom:3px}
+.step.go{border-color:#6a4a10;color:var(--amb)} .step.go b{color:var(--ink)} .step.go b:before{content:"";display:inline-block;width:10px;height:10px;margin-right:7px;border-radius:50%;border:2px solid var(--amb);border-top-color:transparent;animation:sp .8s linear infinite;vertical-align:-1px}
+.step.ok{border-color:#1d5a37;color:var(--grn)} .step.ok b{color:var(--ink)} .step.ok b:before{content:"✓ ";color:var(--grn)}
+.step.bad{border-color:#6a1a1a;color:var(--red2)} .step.bad b:before{content:"✕ ";color:var(--red2)}
+@keyframes sp{to{transform:rotate(360deg)}}
+.bar{height:3px;background:var(--ln);margin:0 16px;border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--red),var(--amb));transition:width .5s}
+.run .ft{display:flex;gap:8px;padding:12px 16px}
+pre{margin:0 16px 14px;max-height:180px;overflow:auto;background:#05080a;border:1px solid var(--ln);border-radius:8px;padding:10px;font:11.5px/1.45 var(--mono);color:#a9e8c0;white-space:pre-wrap;display:none}
+pre.on{display:block}
+.prev{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:30;font:700 11px var(--mono);letter-spacing:.12em;color:#1a1000;background:var(--amb);padding:5px 12px;border-radius:999px;display:none}
+@media (max-width:700px){.units{grid-template-columns:1fr}.app{flex-wrap:wrap}.app .acts{margin-left:0}.steps{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-    <h1>Workload Selector</h1>
+<div class="prev" id="prev">PREVIEW — SIMULATED RESPONSES</div>
+<header class="top">
+  <div class="logo"><svg viewBox="0 0 32 32"><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" fill="none" stroke="#ee0000" stroke-width="1.8"/><path d="M9 19l7-8 7 8M12 22l4-4.5 4 4.5" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+    <div><b>TACEDGE</b><small>MISSION CONTROLLER · RHEL IMAGE MODE · ANSIBLE</small></div></div>
+  <div class="pills"><span class="pill" id="pReg"><i></i>REGISTRY</span><span class="pill" id="pUnits"><i></i>{{ targets|length }} UNITS</span>
+    <span class="pill{% if mock %} w{% endif %}" id="pMode"><i></i>{% if mock %}MOCK MODE{% else %}LIVE{% endif %}</span><span class="clock" id="clk"></span></div>
+</header>
+<main id="main">
+  <section class="sec"><h2>TARGET UNITS <span>pick where the mission goes</span></h2>
+    <div class="units" id="units">
+      <button class="unit all sel" data-t="all"><span class="n">ALL UNITS</span><small>{{ targets|length }} devices</small></button>
+      {% for ip in targets %}
+      <button class="unit" data-t="{{ ip }}"><span class="st ready" id="st{{ loop.index }}">READY</span><div class="n">UNIT {{ loop.index }}</div>
+        <div class="ip">TOUGHBOOK · {{ ip }}</div><div class="cur">IMAGE <b id="cur{{ loop.index }}">—</b></div></button>
+      {% endfor %}
+    </div></section>
 
-    <!-- Target selector: which toughbook(s) the workload applies to -->
-    <div class="target-select" id="target-select">
-        <button class="target active" data-target="all" onclick="setTarget(this)">Both</button>
-        {% for ip in targets %}
-        <button class="target" data-target="{{ ip }}" onclick="setTarget(this)">Unit {{ loop.index }}</button>
-        {% endfor %}
-    </div>
+  <section class="sec"><h2>MISSION PROFILES <span>bootable container images · switch + reboot · instant rollback</span></h2>
+    <div class="grid" id="grid">
+      {% for w in catalog %}
+      <button class="card{% if w.fault %} fault{% endif %}{% if w.id == 'home' %} home{% endif %}" data-id="{{ w.id }}" data-label="{{ w.label }}" data-ver="{{ w.version }}">
+        <div class="in"><div class="ic" data-icon="{{ w.icon }}"></div><div class="t">{{ w.label }}</div><div class="d">{{ w.desc }}</div>
+          <div class="f"><span>TAG <span class="v">{{ w.id }}</span></span><span>{{ w.version }}</span></div></div></button>
+      {% endfor %}
+    </div></section>
 
-    <!-- Buttons for the workloads -->
-    <button class="button" onclick="runWorkload('f22')">F22</button>
-    <button class="button" onclick="runWorkload('b52')">B52</button>
-    <button class="button red-button" onclick="runWorkload('f35')">F35</button>
-    <button class="button green-button" onclick="runWorkload('f35-fixed')">F35</button>
-    <!-- <button class="button" onclick="runWorkload('f22-broken')">F22 - Broken</button> -->
-    <!-- <button class="button" onclick="runWorkload('f35-broken')">F35 - Broken</button> -->
-    <!-- <button class="button" onclick="runWorkload('b52-broken')">B52 - Broken</button> -->
-    <!-- <button class="button" onclick="runWorkload('f22-fixed')">F22 - Fixed</button> -->
-    <!-- <button class="button" onclick="runWorkload('b52-fixed')">B52 - Fixed</button> -->
-    <button class="button" onclick="runWorkload('base')">Browser</button>
+  <section class="sec"><h2>FIELD APPS <span>application containers · no reboot</span></h2>
+    <div class="apps"><div class="app"><div class="ic" data-icon="book"></div>
+      <div><div class="t">Red Hat Offline Knowledge Portal</div><div class="d">Red Hat docs, solutions &amp; CVEs on the device — works fully disconnected. Opens from <b>DOCS</b> in the mission app.</div></div>
+      <div class="acts"><button class="btn pri" id="okpDeploy" {% if not okp %}disabled title="Set OKP_ACCESS_KEY on the controller"{% endif %}>DEPLOY</button>
+        <button class="btn" id="okpRemove" {% if not okp %}disabled{% endif %}>REMOVE</button></div></div></div></section>
+</main>
 
-    <div class="loading" id="loading">Executing, please wait...</div>
+<div class="run" id="run">
+  <div class="hd"><b id="runT">Deploying</b><span class="el" id="runE">0:00</span></div>
+  <div class="steps" id="steps"></div>
+  <div class="bar"><i id="runB"></i></div>
+  <div class="ft"><button class="btn" id="logBtn">SHOW ANSIBLE OUTPUT</button><button class="btn" id="closeBtn" style="margin-left:auto">CLOSE</button></div>
+  <pre id="out"></pre>
+</div>
 
-    <!-- Terminal-like text area for displaying results -->
-    <textarea id="terminal" class="terminal" readonly></textarea>
+<script>
+const ICONS={map:'<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',radar:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/><circle cx="17" cy="15" r="1.2"/>',
+ eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l3 3M20 4l-3 3"/>',net:'<circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><circle cx="12" cy="10" r="2"/><path d="M7 6h10M6.5 7.5l4.5 1.5M17.5 7.5L13 9.5M12 12v4"/>',
+ box:'<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',warn:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',home:'<path d="M3 11l9-7 9 7v9H3z"/><path d="M9 20v-6h6v6"/>',
+ book:'<path d="M4 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4z"/><path d="M20 4h-4a3 3 0 0 0-3 3"/><path d="M20 4v14h-6"/>'};
+document.querySelectorAll('[data-icon]').forEach(e=>e.innerHTML='<svg viewBox="0 0 24 24">'+(ICONS[e.dataset.icon]||ICONS.box)+'</svg>');
+const p2=n=>String(n).padStart(2,'0'), M=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+setInterval(()=>{const d=new Date(); document.getElementById('clk').textContent=p2(d.getUTCDate())+p2(d.getUTCHours())+p2(d.getUTCMinutes())+'Z'+M[d.getUTCMonth()]+String(d.getUTCFullYear()).slice(2);},1000);
 
-    <!-- Progress Bar Container -->
-    <div class="progress-container" id="progress-container">
-        <div class="progress-bar" id="progress-bar"></div>
-    </div>
+// ---- preview mode (no backend reachable): simulate responses so the UI can be reviewed ----
+let PREVIEW=false;
+const realFetch=window.fetch.bind(window);
+async function api(url,body){
+  if(PREVIEW){ await new Promise(r=>setTimeout(r,url.includes('reboot')?3200:2400));
+    return {ok:true,data:{ok:true,output:'PREVIEW: '+url+' '+(body||'')+'\nPLAY RECAP\nunit : ok=3 changed=1 failed=0'}}; }
+  const r=await realFetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+  let data; try{ data=await r.json(); }catch(e){ data={ok:false,output:'HTTP '+r.status}; } return {ok:r.ok&&data.ok,data};
+}
+realFetch('healthz',{cache:'no-store'}).then(r=>r.json()).then(h=>{ document.getElementById('pReg').title=h.registry; })
+  .catch(()=>{ PREVIEW=true; document.getElementById('prev').style.display='block'; const m=document.getElementById('pMode'); m.className='pill w'; m.innerHTML='<i></i>PREVIEW'; });
 
-    <script>
-        let selectedTarget = 'all';
-        function setTarget(btn) {
-            selectedTarget = btn.getAttribute('data-target');
-            document.querySelectorAll('.target').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            displayResult(`Target set: ${btn.textContent}`);
-        }
+// ---- state ----
+const UNITS=[...document.querySelectorAll('.unit[data-t]')].filter(u=>u.dataset.t!=='all');
+let target='all', busy=false, current={};
+document.querySelectorAll('.unit').forEach(u=>u.onclick=()=>{ if(busy) return; target=u.dataset.t; document.querySelectorAll('.unit').forEach(x=>x.classList.toggle('sel',x===u)); markActive(); });
+function idx(ip){ return UNITS.findIndex(u=>u.dataset.t===ip)+1; }
+function tgtList(){ return target==='all'?UNITS.map(u=>u.dataset.t):[target]; }
+function setState(ip,cls,txt){ const s=document.getElementById('st'+idx(ip)); if(s){ s.className='st '+cls; s.textContent=txt; } }
+function markActive(){ const ids=tgtList().map(ip=>current[ip]); document.querySelectorAll('.card').forEach(c=>c.classList.toggle('active', ids.length>0 && ids.every(v=>v===c.dataset.id))); }
 
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
-        }
+// ---- run panel ----
+const run=document.getElementById('run'), out=document.getElementById('out'); let timer=null,t0=0;
+function openRun(title,steps){ document.getElementById('runT').textContent=title; document.getElementById('steps').innerHTML=steps.map((s,i)=>'<div class="step" id="s'+i+'"><b>'+s[0]+'</b>'+s[1]+'</div>').join('');
+  document.getElementById('runB').style.width='4%'; out.textContent=''; run.classList.add('on'); t0=Date.now(); clearInterval(timer);
+  timer=setInterval(()=>{ const s=Math.round((Date.now()-t0)/1000); document.getElementById('runE').textContent=Math.floor(s/60)+':'+p2(s%60); },500); }
+function step(i,cls,pct){ const e=document.getElementById('s'+i); if(e) e.className='step '+cls; if(pct!=null) document.getElementById('runB').style.width=pct+'%'; }
+function log(t){ out.textContent+=t+'\n\n'; out.scrollTop=out.scrollHeight; }
+function done(){ clearInterval(timer); busy=false; document.getElementById('main').classList.remove('busy'); }
+document.getElementById('logBtn').onclick=()=>out.classList.toggle('on');
+document.getElementById('closeBtn').onclick=()=>{ if(!busy) run.classList.remove('on'); };
 
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-        }
+async function launch(card){
+  if(busy) return; busy=true; document.getElementById('main').classList.add('busy');
+  const id=card.dataset.id, lbl=card.dataset.label, ips=tgtList(), who=target==='all'?'ALL UNITS':'UNIT '+idx(target), body='target='+encodeURIComponent(target);
+  openRun(lbl+' → '+who,[['Switch image','bootc switch · '+id],['Reboot','boot into new image'],['Mission online',card.dataset.ver]]);
+  ips.forEach(ip=>setState(ip,'busy','SWITCHING'));
+  step(0,'go',10); let r=await api('workload/'+encodeURIComponent(id),body); log(r.data.output||'');
+  if(!r.ok){ step(0,'bad',100); ips.forEach(ip=>setState(ip,'err','ERROR')); log('>>> IMAGE SWITCH FAILED — unit NOT rebooted.'); out.classList.add('on'); return done(); }
+  step(0,'ok',40); step(1,'go'); ips.forEach(ip=>setState(ip,'busy','REBOOTING'));
+  r=await api('reboot',body); log(r.data.output||'');
+  if(!r.ok){ step(1,'bad',100); ips.forEach(ip=>setState(ip,'err','ERROR')); log('>>> REBOOT FAILED.'); out.classList.add('on'); return done(); }
+  step(1,'ok',85); step(2,'ok',100); ips.forEach(ip=>{ setState(ip,'ready','ONLINE'); current[ip]=id; const c=document.getElementById('cur'+idx(ip)); if(c) c.textContent=card.dataset.ver; });
+  markActive(); done();
+}
+document.querySelectorAll('.card').forEach(c=>c.onclick=()=>launch(c));
 
-        function displayResult(output) {
-            document.getElementById('terminal').value += output + '\n';
-        }
-
-        function showProgressBar() {
-            document.getElementById('progress-container').style.display = 'block';
-            let progressBar = document.getElementById('progress-bar');
-            progressBar.style.width = '0%';  // Reset progress bar
-
-            // Simulate a progress bar incrementing over 60 seconds
-            let width = 0;
-            let interval = setInterval(function() {
-                if (width >= 100) {
-                    clearInterval(interval);
-                } else {
-                    width += (100 / 60);  // Progress increment per second
-                    progressBar.style.width = width + '%';
-                }
-            }, 1000);  // Every 1 second
-        }
-
-        function hideProgressBar() {
-            document.getElementById('progress-container').style.display = 'none';
-        }
-
-        async function runWorkload(workload) {
-            showLoading();
-            showProgressBar();  // Start showing the progress bar
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 300000);  // Timeout set to 5 minutes
-
-            // Display message in terminal that a workload has been selected
-            displayResult(`Workload '${workload}' selected. Awaiting response...`);
-
-            // Start the workload request and progress bar in parallel
-            try {
-                const switchResponsePromise = fetch(`/workload/${workload}`, {
-                    method: 'POST',
-                    signal: controller.signal,
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ target: selectedTarget })
-                });
-
-                // Wait for workload request to complete
-                const switchResponse = await switchResponsePromise;
-
-                clearTimeout(timeoutId);  // Clear the timeout if the request completes
-
-                const data = await switchResponse.json();
-                displayResult(data.output || '(no output)');
-
-                if (switchResponse.ok && data.ok) {
-                    // Hide the progress bar before initiating reboot
-                    hideProgressBar();
-
-                    // Step 2: After a confirmed success, initiate reboot
-                    displayResult(`Workload '${workload}' switched successfully. Initiating reboot...`);
-                    await rebootSystem();
-                } else {
-                    displayResult(`>>> WORKLOAD SWITCH FAILED. Target NOT rebooted.`);
-                    hideProgressBar();  // Hide progress bar if there's an error
-                }
-            } catch (error) {
-                if (error.name === 'AbortError') {
-                    displayResult('Request timed out. The switch operation took too long.');
-                } else {
-                    displayResult(`An error occurred: ${error.message}`);
-                }
-                hideProgressBar();  // Hide progress bar in case of error or timeout
-            } finally {
-                hideLoading();
-            }
-        }
-
-        // Function to call the reboot endpoint
-        async function rebootSystem() {
-            try {
-                const response = await fetch('/reboot', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ target: selectedTarget })
-                });
-                const data = await response.json();
-                if (response.ok && data.ok) {
-                    displayResult(`System reboot initiated.\n${data.output || ''}`);
-                } else {
-                    displayResult(`>>> REBOOT FAILED.\n${data.output || ''}`);
-                }
-            } catch (error) {
-                displayResult(`An error occurred during reboot: ${error.message}`);
-            }
-        }
-    </script>
+async function okp(action){
+  if(busy) return; busy=true; document.getElementById('main').classList.add('busy');
+  const who=target==='all'?'ALL UNITS':'UNIT '+idx(target);
+  openRun((action==='deploy'?'Deploy':'Remove')+' Field Docs → '+who,[[action==='deploy'?'Start container':'Stop container','podman · rhokp'],['Health check','http://localhost:8090'],['Ready',action==='deploy'?'tap DOCS on the unit':'removed']]);
+  step(0,'go',15); const r=await api('app/okp/'+action,'target='+encodeURIComponent(target)); log(r.data.output||'');
+  if(!r.ok){ step(0,'bad',100); log('>>> FIELD DOCS '+action.toUpperCase()+' FAILED.'); out.classList.add('on'); return done(); }
+  step(0,'ok',60); step(1,'ok',85); step(2,'ok',100); done();
+}
+document.getElementById('okpDeploy').onclick=()=>okp('deploy');
+document.getElementById('okpRemove').onclick=()=>okp('remove');
+</script>
 </body>
 </html>

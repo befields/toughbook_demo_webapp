@@ -11,6 +11,7 @@ Environment="TARGET_IP={{ target_ip }}"
 Environment="REGISTRY_HOST={{ registry_host }}"
 Environment="IMAGE_REPO={{ image_repo }}"
 Environment="WORKLOADS={{ workloads }}"
+EnvironmentFile=-/etc/tacedge/okp.env
 ExecStart={{ venv_dir }}/bin/gunicorn --workers 3 --timeout 300 --bind 127.0.0.1:8000 app:app
 Restart=always
 RestartSec=3

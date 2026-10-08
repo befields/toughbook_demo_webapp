@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TACEDGE — Counter-UAS</title>
+<link rel="stylesheet" href="../shared/tacedge.css">
+<script src="../config.js" onerror="void 0"></script>
+<script src="../shared/vendor/milsymbol.js"></script>
+<script src="../shared/vendor/mgrs.min.js"></script>
+<script src="../shared/tacedge.js"></script>
+<style>
+.cu{position:absolute;inset:0;display:grid;grid-template-columns:330px 1fr 290px;gap:8px;padding:8px}
+.side{display:flex;flex-direction:column;gap:8px;min-height:0}
+.scope{position:relative;border:1px solid var(--line2);border-radius:4px;background:radial-gradient(circle at 50% 50%,#08130e,#030706 70%);overflow:hidden}
+.scope canvas{position:absolute;inset:0;width:100%;height:100%}
+.tc{position:absolute;left:12px;top:12px;font:700 13px var(--mono);letter-spacing:.12em;padding:8px 12px;border-radius:3px;border:1px solid}
+.tc.y{color:var(--yel);border-color:#6a5a10;background:rgba(40,34,4,.8)} .tc.r{color:#fff;border-color:var(--red);background:rgba(120,10,10,.85)} .tc.g{color:var(--grn);border-color:#1f5a3a;background:rgba(4,30,16,.8)}
+.alert{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);font:700 14px var(--mono);letter-spacing:.1em;color:#fff;background:rgba(150,10,10,.9);
+  border:1px solid #ff6b6b;padding:10px 18px;border-radius:4px;display:none;box-shadow:0 0 30px rgba(255,0,0,.35)}
+table{width:100%;border-collapse:collapse;font:11.5px var(--mono)}
+th{color:var(--faint);font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);letter-spacing:.06em}
+td{padding:6px 8px;border-bottom:1px solid #0f1b1d;white-space:nowrap}
+tr.sel td{background:#10272a} tr{cursor:pointer}
+.cl{font-weight:700} .cl.H{color:var(--red)} .cl.F{color:var(--cyn)} .cl.P{color:var(--yel)} .cl.N{color:var(--faint)}
+.thr{display:inline-block;height:6px;background:var(--red);border-radius:2px;vertical-align:1px}
+.st{display:flex;justify-content:space-between;padding:7px 12px;font:12px var(--mono);border-bottom:1px solid #0f1b1d}
+.st b{font-weight:700} .ok{color:var(--grn)} .am{color:var(--amb)} .rd{color:var(--red)} .cy{color:var(--cyn)}
+</style></head><body>
+<script>
+const body = TE.init({title:'Counter-UAS · Air Picture', version:'C-UAS v2.4', sub:'FOB SIDEWINDER · AD SECTOR 3', callsign:'GUARDIAN 3'});
+body.innerHTML=`
+<div class="cu">
+  <div class="side">
+    <div class="panel" style="flex:1;min-height:0;overflow:hidden"><h3>AIR TRACKS <em id="tcount"></em></h3>
+      <table><thead><tr><th>TRK</th><th>CLASS</th><th>TYPE</th><th>RNG</th><th>BRG</th><th>THREAT</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="panel"><h3>SELECTED TRACK <em id="sid">—</em></h3><div class="det mono" id="det" style="padding:10px 12px;font-size:12px;line-height:1.75"></div></div>
+  </div>
+  <div class="scope scan" id="scope"><canvas id="rc"></canvas><div class="tc y" id="tcn">AIR THREAT: YELLOW</div><div class="alert blink" id="alert"></div></div>
+  <div class="side">
+    <div class="panel"><h3>SENSORS</h3>
+      <div class="st"><span>RADAR 3D · 360°</span><b class="ok">ONLINE</b></div>
+      <div class="st"><span>RF DETECT</span><b class="ok">ONLINE</b></div>
+      <div class="st"><span>EO/IR TURRET</span><b class="cy" id="eo">SCANNING</b></div>
+      <div class="st"><span>ACOUSTIC ARRAY</span><b class="am">STANDBY</b></div>
+      <div class="st"><span>EDGE AI CLASSIFIER</span><b class="ok">ON-DEVICE · 18 ms</b></div></div>
+    <div class="panel"><h3>DEFEAT OPTIONS <em>SIMULATED</em></h3>
+      <div class="st"><span>RF DEFEAT</span><b class="ok" id="d1">READY</b></div>
+      <div class="st"><span>NAV DENIAL</span><b class="am">SAFE</b></div>
+      <div class="st"><span>INTERCEPT UAS</span><b class="ok" id="d3">READY 2/2</b></div></div>
+    <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column"><h3>EVENT LOG</h3><div class="log" id="log"></div></div>
+  </div>
+</div>`;
+const R=TE.rng(77), rc=document.getElementById('rc'), sc=document.getElementById('scope'), x=rc.getContext('2d');
+const T=TE.Terrain(23); let W,H,cx,cy,rad,DPR,under;
+const MAXR=4000; // meters
+function resize(){ const r=sc.getBoundingClientRect(); DPR=Math.min(devicePixelRatio||1,2); W=r.width; H=r.height; rc.width=W*DPR; rc.height=H*DPR; x.setTransform(DPR,0,0,DPR,0,0);
+  cx=W/2; cy=H/2; rad=Math.min(W,H)/2-26;
+  under=document.createElement('canvas'); under.width=W; under.height=H; const ux=under.getContext('2d');
+  T.render(ux,W,H,{cx:0,cy:0,mpp:MAXR/rad},{scale:.4,palette:[[4,10,7],[8,18,12],[12,26,16],[18,34,22],[24,42,28]]});
+  ux.globalCompositeOperation='destination-in'; ux.beginPath(); ux.arc(cx,cy,rad,0,7); ux.fill(); }
+const tracks=[]; let nid=1040, sel=null;
+const TYPES={H:['QUADCOPTER · GRP 1','FIXED-WING · GRP 2','HEXACOPTER · GRP 1'],F:['FRIENDLY UAS · RAVEN','FRIENDLY ROTARY · MEDEVAC'],N:['BIRD (FILTERED)']};
+function spawn(kind){ const a=R()*Math.PI*2, r=MAXR*(.85+R()*.12);
+  const t={id:'T-'+(nid++),x:Math.cos(a)*r,y:Math.sin(a)*r,alt:Math.round(60+R()*240),cls:'P',truth:kind,type:'PENDING',born:performance.now(),hist:[],shown:{x:0,y:0},seen:0};
+  const inbound=kind==='H'?.75+R()*.2:kind==='F'?.2:.1, head=a+Math.PI+(R()-.5)*(1-inbound)*2.4, sp=kind==='H'?14+R()*16:kind==='F'?22:8;
+  t.vx=Math.cos(head)*sp; t.vy=Math.sin(head)*sp; t.kts=Math.round(sp*1.944); tracks.push(t); TE.log(logEl,'NEW AIR TRACK '+t.id+' — BRG '+brg(t)+'° RNG '+rng(t)+' m — CLASSIFYING','w'); return t; }
+const rng=t=>Math.round(Math.hypot(t.x,t.y)); const brg=t=>String(Math.round(((90-Math.atan2(t.y,t.x)*180/Math.PI)+360)%360)).padStart(3,'0');
+const logEl=document.getElementById('log');
+let sweep=0, alertT=null;
+function frame(ts){
+  const now=performance.now(); const prev=sweep; sweep=(now/1000*Math.PI*2/4)%(Math.PI*2);
+  x.clearRect(0,0,W,H); x.globalAlpha=.75; x.drawImage(under,0,0,W,H); x.globalAlpha=1;
+  // rings & ticks
+  x.strokeStyle='rgba(77,255,154,.22)'; x.lineWidth=1; x.font='10px monospace'; x.fillStyle='rgba(77,255,154,.6)';
+  for(let k=1;k<=4;k++){ x.beginPath(); x.arc(cx,cy,rad*k/4,0,7); x.stroke(); x.fillText((k)+' km',cx+4,cy-rad*k/4+12); }
+  x.strokeStyle='rgba(255,59,59,.45)'; x.setLineDash([5,5]); x.beginPath(); x.arc(cx,cy,rad*1500/MAXR,0,7); x.stroke(); x.setLineDash([]);
+  x.fillStyle='rgba(255,90,90,.75)'; x.fillText('WARNING 1.5 km',cx+4,cy+rad*1500/MAXR-4);
+  for(let d=0;d<360;d+=10){ const a=(90-d)*Math.PI/180, r1=rad, r2=rad+(d%30?5:10); x.strokeStyle='rgba(77,255,154,.45)';
+    x.beginPath(); x.moveTo(cx+Math.cos(a)*r1,cy-Math.sin(a)*r1); x.lineTo(cx+Math.cos(a)*r2,cy-Math.sin(a)*r2); x.stroke();
+    if(d%30===0){ x.fillStyle='rgba(150,255,190,.75)'; x.textAlign='center'; x.fillText(String(d).padStart(3,'0'),cx+Math.cos(a)*(rad+18),cy-Math.sin(a)*(rad+18)+4); x.textAlign='left'; } }
+  x.strokeStyle='rgba(77,255,154,.12)'; x.beginPath(); x.moveTo(cx-rad,cy); x.lineTo(cx+rad,cy); x.moveTo(cx,cy-rad); x.lineTo(cx,cy+rad); x.stroke();
+  // sweep
+  const sa=Math.PI/2-sweep; const g=x.createConicGradient? x.createConicGradient(-sa-Math.PI*2*.14,cx,cy):null;
+  if(g){ g.addColorStop(0,'rgba(77,255,154,0)'); g.addColorStop(.14,'rgba(77,255,154,.38)'); g.addColorStop(.1401,'rgba(77,255,154,0)'); g.addColorStop(1,'rgba(77,255,154,0)');
+    x.save(); x.scale(1,1); x.fillStyle=g; x.beginPath(); x.moveTo(cx,cy); x.arc(cx,cy,rad,0,7); x.fill(); x.restore(); }
+  x.strokeStyle='rgba(120,255,180,.9)'; x.lineWidth=2; x.beginPath(); x.moveTo(cx,cy); x.lineTo(cx+Math.cos(sa)*rad,cy-Math.sin(sa)*rad); x.stroke();
+  // asset
+  x.fillStyle='#38d6ff'; x.beginPath(); x.moveTo(cx,cy-7); x.lineTo(cx+6,cy+5); x.lineTo(cx-6,cy+5); x.fill(); x.font='700 10px monospace'; x.fillText('FOB',cx+8,cy+4);
+  // tracks
+  tracks.forEach(t=>{
+    const ta=(Math.PI/2-Math.atan2(t.y,t.x)+Math.PI*4)%(Math.PI*2); // track azimuth in sweep coords (clockwise from N)
+    const crossed = prev<=sweep ? (ta>prev&&ta<=sweep) : (ta>prev||ta<=sweep);
+    if(crossed){ t.shown={x:t.x,y:t.y}; t.seen=now; t.hist.push([t.x,t.y]); if(t.hist.length>6) t.hist.shift(); }
+    if(!t.seen) return; const age=(now-t.seen)/4000, al=TE.clamp(1-age*.55,.25,1);
+    const px=cx+t.shown.x/MAXR*rad, py=cy-t.shown.y/MAXR*rad;
+    const col = t.cls==='H'?'255,59,59':t.cls==='F'?'56,214,255':t.cls==='N'?'110,130,120':'255,225,74';
+    x.strokeStyle='rgba('+col+','+(al*.4)+')'; x.lineWidth=1; x.beginPath(); t.hist.forEach((h,i)=>{ const hx=cx+h[0]/MAXR*rad, hy=cy-h[1]/MAXR*rad; i?x.lineTo(hx,hy):x.moveTo(hx,hy); }); x.stroke();
+    x.fillStyle='rgba('+col+','+al+')'; x.strokeStyle='rgba('+col+','+al+')'; x.lineWidth=2;
+    if(t.cls==='H'){ x.beginPath(); x.moveTo(px,py-8); x.lineTo(px+8,py); x.lineTo(px,py+8); x.lineTo(px-8,py); x.closePath(); x.stroke(); }
+    else if(t.cls==='F'){ x.beginPath(); x.arc(px,py,7,Math.PI,0); x.stroke(); }
+    else if(t.cls==='N'){ x.beginPath(); x.arc(px,py,2.5,0,7); x.fill(); }
+    else { x.strokeRect(px-6,py-6,12,12); }
+    if(t.cls!=='N'){ // velocity leader + label
+      x.beginPath(); x.moveTo(px,py); x.lineTo(px+t.vx*1.6/MAXR*rad*10,py-t.vy*1.6/MAXR*rad*10); x.stroke();
+      x.font='700 10px monospace'; x.fillText(t.id,px+10,py-6); x.font='10px monospace'; x.fillText(t.alt+'m '+t.kts+'kt',px+10,py+6); }
+    if(sel===t){ x.strokeStyle='#4dff9a'; x.setLineDash([3,3]); x.strokeRect(px-13,py-13,26,26); x.setLineDash([]); }
+    t.px=px; t.py=py;
+  });
+  requestAnimationFrame(frame);
+}
+function sim(){
+  const dt=.5;
+  tracks.forEach(t=>{ t.x+=t.vx*dt; t.y+=t.vy*dt; if(t.truth==='N'){ t.vx+=(R()-.5)*3; t.vy+=(R()-.5)*3; }
+    if(t.cls==='P' && performance.now()-t.born>5000){ t.cls=t.truth; t.type=TYPES[t.truth][Math.floor(R()*TYPES[t.truth].length)];
+      TE.log(logEl,'EDGE AI: '+t.id+' CLASSIFIED '+(t.truth==='H'?'HOSTILE':t.truth==='F'?'FRIENDLY (IFF MODE 5)':'NON-THREAT (BIRD)')+' — '+t.type,t.truth==='H'?'r':t.truth==='F'?'c':''); }
+    t.thr = t.cls==='H'? TE.clamp(Math.round(100-rng(t)/MAXR*80),5,99) : 0;
+    if(t.cls==='H' && rng(t)<1500 && !t.warned){ t.warned=1; raise(t); }
+    if(t.cls==='H' && t.warned && !t.def && performance.now()-t.warnedAt>6000){ t.def=1; TE.log(logEl,'GUARDIAN 3: '+t.id+' DEFEAT APPROVED — RF NON-KINETIC (SIMULATED)','w');
+      document.getElementById('d1').textContent='ACTIVE'; document.getElementById('d1').className='am';
+      setTimeout(()=>{ t.gone=1; TE.log(logEl,t.id+' LINK SEVERED — TRACK LOST · ASSESS: NEUTRALIZED','g'); document.getElementById('d1').textContent='READY'; document.getElementById('d1').className='ok'; clearAlert(); },4000); }
+  });
+  for(let i=tracks.length-1;i>=0;i--){ const t=tracks[i]; if(t.gone||rng(t)>MAXR*1.02){ if(sel===t) sel=null; tracks.splice(i,1);} }
+  const h=tracks.filter(t=>t.cls==='H'), tcn=document.getElementById('tcn');
+  const lvl = h.some(t=>rng(t)<1500)?'r':h.length?'y':'g';
+  tcn.className='tc '+lvl; tcn.textContent='AIR THREAT: '+(lvl==='r'?'RED':lvl==='y'?'YELLOW':'GREEN');
+  document.getElementById('eo').textContent = h.length?'SLEWED '+h[0].id:'SCANNING';
+  table(); det();
+}
+function raise(t){ t.warnedAt=performance.now(); const a=document.getElementById('alert'); a.textContent='⚠ HOSTILE '+t.id+' INSIDE WARNING RING — '+rng(t)+' m BRG '+brg(t); a.style.display='block';
+  TE.log(logEl,'ALERT: '+t.id+' INSIDE 1.5 km — CUE DEFEAT OPTIONS','r'); if(!sel) sel=t; }
+function clearAlert(){ document.getElementById('alert').style.display='none'; }
+const tb=document.getElementById('tb');
+function table(){ const rows=[...tracks].sort((a,b)=>(b.thr-a.thr)||(rng(a)-rng(b)));
+  document.getElementById('tcount').textContent=rows.length+' ACTIVE';
+  tb.innerHTML=rows.map(t=>'<tr data-id="'+t.id+'" class="'+(sel===t?'sel':'')+'"><td>'+t.id+'</td><td class="cl '+t.cls+'">'+({H:'HOSTILE',F:'FRIEND',P:'PENDING',N:'NON-THR'})[t.cls]+'</td><td>'+
+    (t.type.split(' ·')[0])+'</td><td>'+rng(t)+'</td><td>'+brg(t)+'</td><td>'+(t.thr?'<span class="thr" style="width:'+Math.round(t.thr*.5)+'px"></span> '+t.thr:'—')+'</td></tr>').join('');
+  [...tb.children].forEach(r=>r.onclick=()=>{ sel=tracks.find(t=>t.id===r.dataset.id); table(); det(); }); }
+function det(){ const e=document.getElementById('det'); if(!sel){ e.innerHTML='<span style="color:var(--dim)">Tap a track on the scope or in the table.</span>'; document.getElementById('sid').textContent='—'; return; }
+  const t=sel; document.getElementById('sid').textContent=t.id;
+  const k=s=>'<span style="color:var(--dim);display:inline-block;width:96px">'+s+'</span>';
+  e.innerHTML=k('CLASS')+({H:'<b class="rd">HOSTILE</b>',F:'<b class="cy">FRIENDLY</b>',P:'<b style="color:var(--yel)">PENDING</b>',N:'NON-THREAT'})[t.cls]+'<br>'+
+    k('TYPE')+t.type+'<br>'+k('RANGE / BRG')+rng(t)+' m / '+brg(t)+'°<br>'+k('ALT AGL')+t.alt+' m<br>'+k('SPEED')+t.kts+' kt<br>'+
+    k('POSITION')+TE.mgrs(t.x-4000,t.y+2000)+'<br>'+k('SOURCES')+'RADAR · RF'+(t.cls!=='P'?' · EO/IR':'')+'<br>'+k('THREAT')+(t.thr||0); }
+rc.addEventListener('pointerdown',e=>{ const r=rc.getBoundingClientRect(); let b=null,bd=28;
+  tracks.forEach(t=>{ if(t.px==null) return; const d=Math.hypot(t.px-(e.clientX-r.left),t.py-(e.clientY-r.top)); if(d<bd){bd=d;b=t;} }); if(b){ sel=b; table(); det(); } });
+window.addEventListener('resize',resize); resize();
+['F','H','N','H','F'].forEach(k=>{ const t=spawn(k); t.x*=.4+R()*.5; t.y*=.4+R()*.5; t.born-=4000; });
+setInterval(sim,500); setInterval(()=>{ if(tracks.length<9) spawn(R()<.5?'H':R()<.6?'F':'N'); },7000);
+TE.log(logEl,'C-UAS NODE ONLINE — SENSOR FUSION ACTIVE','g'); requestAnimationFrame(frame);
+</script></body></html>

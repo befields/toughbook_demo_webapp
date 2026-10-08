@@ -18,7 +18,10 @@ Environment=TARGET_SSH_PASS=edge
 Environment=TARGET_BECOME_PASS=edge
 Environment=REGISTRY_HOST=192.168.8.100:5000
 Environment=IMAGE_REPO=bootc-flightgear
-Environment=WORKLOADS=f22,b52,f35,f35-fixed,base
+# Optional: limit/extend the mission buttons, e.g. add FlightGear tags if they work:
+# Environment=WORKLOADS=cop,cuas,isr,netops,sustain,cop-degraded,home,f35
+# Field Docs access key lives in a root-only file (one line: OKP_ACCESS_KEY=...)
+EnvironmentFile=/etc/tacedge/okp.env
 Environment=PORT=80
 
 [Service]

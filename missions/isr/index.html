@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TACEDGE — ISR Feed</title>
+<link rel="stylesheet" href="../shared/tacedge.css">
+<script src="../config.js" onerror="void 0"></script>
+<script src="../shared/vendor/milsymbol.js"></script>
+<script src="../shared/vendor/mgrs.min.js"></script>
+<script src="../shared/tacedge.js"></script>
+<style>
+.is{position:absolute;inset:0;display:grid;grid-template-columns:1fr 310px;gap:8px;padding:8px}
+.vid{position:relative;border:1px solid var(--line2);border-radius:4px;overflow:hidden;background:#000}
+.vid canvas{position:absolute;inset:0;width:100%;height:100%}
+.side{display:flex;flex-direction:column;gap:8px;min-height:0}
+.tools{display:flex;gap:6px;padding:10px;flex-wrap:wrap}
+.dl li{align-items:center} .dl .c{font-weight:700} .dl .c.mil{color:var(--red)} .dl .c.civ{color:var(--grn)} .dl .c.per{color:var(--yel)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:10px 12px;font:12px var(--mono)} .kv span:nth-child(odd){color:var(--dim)}
+</style></head><body>
+<script>
+const body=TE.init({title:'ISR Full-Motion Video · Edge AI', version:'ISR v1.8', sub:'RAVEN 21 · EO/IR', callsign:'RAVEN 21'});
+body.innerHTML=`
+<div class="is">
+  <div class="vid" id="vid"><canvas id="vc"></canvas><canvas id="hc"></canvas></div>
+  <div class="side">
+    <div class="panel"><h3>SENSOR</h3><div class="tools"><button class="te-btn on" id="bEO">EO</button><button class="te-btn" id="bIR">IR · WHITE HOT</button>
+      <button class="te-btn on" id="bAI">AI BOXES</button><button class="te-btn" id="bSnap">SNAPSHOT</button></div></div>
+    <div class="panel"><h3>EDGE INFERENCE <em>ON-DEVICE</em></h3><div class="kv">
+      <span>MODEL</span><span>OBJ-DETECT v3 · INT8</span><span>LATENCY</span><span id="lat">23 ms</span><span>THROUGHPUT</span><span id="fps">29.7 FPS</span>
+      <span>BACKHAUL</span><span style="color:var(--amb)">NOT REQUIRED</span><span>DATA</span><span>SIMULATED FEED</span></div></div>
+    <div class="panel" style="flex:1;min-height:0;overflow:hidden"><h3>DETECTIONS <em id="dc"></em></h3><ul class="list dl" id="dl"></ul></div>
+    <div class="panel" style="height:150px;display:flex;flex-direction:column"><h3>ANALYST LOG</h3><div class="log" id="log"></div></div>
+  </div>
+</div>`;
+const R=TE.rng(99), T=TE.Terrain(57), vc=document.getElementById('vc'), hc=document.getElementById('hc'), V=vc.getContext('2d'), Hx=hc.getContext('2d');
+const vidEl=document.getElementById('vid'); let W,H,DPR, tile, TS=2600, MPP=.55; let IR=false, AI=true;
+// world: road + compound + movers (meters, local frame around target area)
+const road=[[-900,-500],[-500,-260],[-200,-140],[120,-40],[420,60],[760,240],[1100,320]];
+const road2=[[80,-700],[60,-300],[120,-40],[180,300],[140,700]];
+const bld=[[160,80,46,28],[230,60,30,22],[200,130,26,34],[-120,-220,40,26],[300,-60,22,22],[520,190,34,24]];
+function pathPt(p,t){ let L=0; const seg=[]; for(let i=0;i<p.length-1;i++){ const d=Math.hypot(p[i+1][0]-p[i][0],p[i+1][1]-p[i][1]); seg.push(d); L+=d; }
+  let s=((t%1)+1)%1*L; for(let i=0;i<seg.length;i++){ if(s<=seg[i]){ const f=s/seg[i]; return [TE.lerp(p[i][0],p[i+1][0],f),TE.lerp(p[i][1],p[i+1][1],f),Math.atan2(p[i+1][1]-p[i][1],p[i+1][0]-p[i][0])]; } s-=seg[i]; } return p[p.length-1].concat(0); }
+const movers=[
+  {k:'mil',lab:'MILITARY VEHICLE',sub:'BTR-TYPE',p:road,t:.05,v:.008,w:7,l:3,id:'TGT-11'},
+  {k:'mil',lab:'MILITARY VEHICLE',sub:'TECHNICAL',p:road,t:.12,v:.008,w:5.5,l:2.6,id:'TGT-12'},
+  {k:'civ',lab:'CIVILIAN VEHICLE',sub:'SEDAN',p:road2,t:.3,v:.012,w:4.6,l:2,id:'TGT-13'},
+  {k:'civ',lab:'CIVILIAN VEHICLE',sub:'PICKUP',p:road,t:.62,v:-.006,w:5.2,l:2.2,id:'TGT-14'},
+  {k:'per',lab:'PERSON',sub:'DISMOUNT',fixed:[195,40],id:'TGT-15'},
+  {k:'per',lab:'PERSON',sub:'DISMOUNT',fixed:[205,44],id:'TGT-16'},
+];
+function makeTile(){
+  tile=document.createElement('canvas'); const px=Math.round(TS/MPP); tile.width=px; tile.height=px; const t=tile.getContext('2d');
+  T.render(t,px,px,{cx:2000,cy:3000,mpp:MPP},{scale:.35,contour:9,palette:[[92,86,72],[110,102,84],[124,116,96],[138,128,106],[150,140,118]]});
+  // ground texture speckle
+  const r=TE.rng(5); for(let i=0;i<px*px/90;i++){ t.fillStyle='rgba('+(r()<.5?40:200)+','+(r()<.5?40:190)+',150,'+(r()*.08)+')'; t.fillRect(r()*px,r()*px,2,2); }
+  const w2t=(x,y)=>[px/2+x/MPP, px/2-y/MPP];
+  [road,road2].forEach((p,j)=>{ t.strokeStyle='rgba(170,160,135,.9)'; t.lineWidth=(j?7:10)/MPP*.6; t.lineCap='round'; t.lineJoin='round'; t.beginPath();
+    p.forEach((q,i)=>{const s=w2t(q[0],q[1]); i?t.lineTo(s[0],s[1]):t.moveTo(s[0],s[1]);}); t.stroke(); });
+  // compound wall
+  t.strokeStyle='rgba(200,190,170,.85)'; t.lineWidth=2.2/MPP; const a=w2t(140,160), b=w2t(270,30); t.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);
+  bld.forEach(q=>{ const s=w2t(q[0],q[1]); const w=q[2]/MPP, h=q[3]/MPP; t.fillStyle='rgba(20,18,14,.45)'; t.fillRect(s[0]+6/MPP*.4,s[1]+6/MPP*.4,w,h);
+    t.fillStyle='rgb(176,168,150)'; t.fillRect(s[0],s[1],w,h); t.strokeStyle='rgba(90,84,70,.8)'; t.lineWidth=1.2; t.strokeRect(s[0],s[1],w,h); });
+  // scrub
+  for(let i=0;i<900;i++){ const x=(r()-.5)*TS, y=(r()-.5)*TS, s=w2t(x,y); t.fillStyle='rgba(60,62,44,'+(.35+r()*.4)+')'; t.beginPath(); t.arc(s[0],s[1],(1+r()*2.2)/MPP,0,7); t.fill(); }
+}
+const noise=document.createElement('canvas'); noise.width=256; noise.height=256; { const n=noise.getContext('2d'), id=n.createImageData(256,256), r=TE.rng(3);
+  for(let i=0;i<id.data.length;i+=4){ const v=r()*255; id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=26; } n.putImageData(id,0,0); }
+function resize(){ const r=vidEl.getBoundingClientRect(); DPR=Math.min(devicePixelRatio||1,2); W=r.width; H=r.height;
+  [vc,hc].forEach(c=>{c.width=W*DPR;c.height=H*DPR;}); V.setTransform(DPR,0,0,DPR,0,0); Hx.setTransform(DPR,0,0,DPR,0,0); }
+let cam={x:180,y:60,rot:0,zoom:1.25}, dets=[];
+function frame(){
+  const now=performance.now()/1000;
+  cam.rot = Math.sin(now/40)*.35 + now*.01; cam.x=170+Math.cos(now/23)*35; cam.y=70+Math.sin(now/29)*28;
+  const k=cam.zoom/MPP; // px per meter
+  V.save(); V.fillStyle='#000'; V.fillRect(0,0,W,H);
+  V.translate(W/2,H/2); V.rotate(cam.rot); V.scale(cam.zoom,cam.zoom);
+  V.translate(-tile.width/2-cam.x/MPP, -tile.height/2+cam.y/MPP);
+  V.drawImage(tile,0,0); V.restore();
+  // movers (world -> screen)
+  const c=Math.cos(cam.rot), s=Math.sin(cam.rot);
+  const w2s=(x,y)=>{ const dx=(x-cam.x)*k, dy=-(y-cam.y)*k; return [W/2+dx*c-dy*s, H/2+dx*s+dy*c]; };
+  dets=[];
+  movers.forEach(m=>{ let x,y,a; if(m.fixed){ x=m.fixed[0]+Math.sin(now*.7+m.fixed[1])*1.2; y=m.fixed[1]+Math.cos(now*.5)*1; a=0; }
+    else { m.t+=m.v/60; const q=pathPt(m.p,m.t); x=q[0]; y=q[1]; a=q[2]; }
+    const p=w2s(x,y); m.sx=p[0]; m.sy=p[1]; m.x=x; m.y=y;
+    V.save(); V.translate(p[0],p[1]); V.rotate(cam.rot-a);
+    if(m.fixed){ V.fillStyle='rgba(15,15,12,.5)'; V.beginPath(); V.ellipse(3,3,3.5,2,0,0,7); V.fill(); V.fillStyle=m.k==='per'?'#2c2a24':'#333'; V.beginPath(); V.arc(0,0,2.6*cam.zoom,0,7); V.fill(); }
+    else { const L=m.w*k, Wd=m.l*k; V.fillStyle='rgba(10,10,8,.5)'; V.fillRect(-L/2+4,-Wd/2+4,L,Wd); V.fillStyle=m.k==='mil'?'#4b4d3c':'#d8d4c8'; V.fillRect(-L/2,-Wd/2,L,Wd);
+      V.fillStyle='rgba(0,0,0,.35)'; V.fillRect(L*.05,-Wd/2+2,L*.3,Wd-4); }
+    V.restore();
+    if(p[0]>-40&&p[0]<W+40&&p[1]>-40&&p[1]<H+40) dets.push(m); });
+  // look: EO or IR
+  if(IR){ V.globalCompositeOperation='difference'; V.fillStyle='#fff'; V.fillRect(0,0,W,H); V.globalCompositeOperation='saturation'; V.fillStyle='#000'; V.fillRect(0,0,W,H);
+    V.globalCompositeOperation='source-over'; V.fillStyle='rgba(0,0,0,.25)'; V.fillRect(0,0,W,H);
+    dets.forEach(m=>{ const g=V.createRadialGradient(m.sx,m.sy,0,m.sx,m.sy,m.fixed?10:22); g.addColorStop(0,'rgba(255,255,255,.95)'); g.addColorStop(1,'rgba(255,255,255,0)'); V.fillStyle=g; V.beginPath(); V.arc(m.sx,m.sy,m.fixed?10:22,0,7); V.fill(); }); }
+  else { V.globalCompositeOperation='saturation'; V.fillStyle='rgba(0,0,0,.65)'; V.fillRect(0,0,W,H); V.globalCompositeOperation='source-over'; V.fillStyle='rgba(30,20,0,.08)'; V.fillRect(0,0,W,H); }
+  V.drawImage(noise,-(now*997%256),-(now*613%256),W+512,H+512);
+  const vg=V.createRadialGradient(W/2,H/2,Math.min(W,H)*.35,W/2,H/2,Math.max(W,H)*.75); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,.6)'); V.fillStyle=vg; V.fillRect(0,0,W,H);
+  hud(now,w2s);
+  requestAnimationFrame(frame);
+}
+function hud(now,w2s){
+  const h=Hx; h.clearRect(0,0,W,H); const C='rgba(230,255,240,.92)'; h.strokeStyle=C; h.fillStyle=C; h.lineWidth=1.5; h.font='600 12px monospace';
+  const cx=W/2, cy=H/2; // reticle
+  h.beginPath(); [[-60,-14],[14,60]].forEach(([a,b])=>{ h.moveTo(cx+a,cy); h.lineTo(cx+b,cy); h.moveTo(cx,cy+a); h.lineTo(cx,cy+b); }); h.stroke();
+  h.strokeRect(cx-4,cy-4,8,8);
+  // corner brackets
+  const m=26,L=34; [[m,m,1,1],[W-m,m,-1,1],[m,H-m,1,-1],[W-m,H-m,-1,-1]].forEach(([x,y,sx,sy])=>{ h.beginPath(); h.moveTo(x,y+sy*L); h.lineTo(x,y); h.lineTo(x+sx*L,y); h.stroke(); });
+  // heading tape
+  const hdg=((cam.rot*180/Math.PI)%360+360)%360; h.save(); h.beginPath(); h.rect(cx-200,14,400,28); h.clip();
+  for(let d=-40;d<=40;d+=5){ const v=Math.round(hdg/5)*5+d, x=cx+(v-hdg)*5; h.beginPath(); h.moveTo(x,38); h.lineTo(x,v%10?32:27); h.stroke();
+    if(v%10===0){ h.textAlign='center'; h.fillText(String(((v%360)+360)%360).padStart(3,'0'),x,24); } } h.restore();
+  h.beginPath(); h.moveTo(cx,42); h.lineTo(cx-6,50); h.lineTo(cx+6,50); h.closePath(); h.fill(); h.textAlign='left';
+  // text blocks
+  const ctr=TE.mgrs(6000+cam.x,-1500+cam.y);
+  const tl=['RAVEN 21 · FMV','SENSOR '+(IR?'IR WHT-HOT':'EO')+' · NFOV','FOV 1.8° x 1.0°','ZOOM 12.4x'];
+  tl.forEach((t,i)=>h.fillText(t,40,66+i*17));
+  h.textAlign='right'; h.fillStyle='#ff5a5a'; if(Math.floor(now*1.2)%2) h.fillText('● REC',W-40,66); h.fillStyle=C; h.fillText(TE.hms(),W-40,83); h.fillText('KLV 0601 · CH 3',W-40,100); h.textAlign='left';
+  const bl=['A/C ALT  11,480 FT MSL','A/C HDG  '+String(Math.round((hdg+180)%360)).padStart(3,'0')+'°  GS 74 KT','SLANT RNG 4.82 KM','TGT LOC  '+ctr,'TGT ELEV 2,413 FT'];
+  bl.forEach((t,i)=>h.fillText(t,40,H-40-(bl.length-1-i)*17));
+  h.textAlign='right'; ['LAT '+TE.toLL(6000+cam.x,-1500+cam.y).lat.toFixed(5)+'N','LON '+Math.abs(TE.toLL(6000+cam.x,-1500+cam.y).lon).toFixed(5)+'W','GIMBAL AZ 271.4  EL -63.2','LINK  -71 dBm · 8.2 Mbps'].forEach((t,i,a)=>h.fillText(t,W-40,H-40-(a.length-1-i)*17)); h.textAlign='left';
+  // AI boxes
+  if(AI) dets.forEach(m=>{ const sz=m.fixed?14:Math.max(m.w,m.l)*cam.zoom/MPP*.62+8, x=m.sx-sz, y=m.sy-sz, w=sz*2;
+    const col=m.k==='mil'?'#ff3b3b':m.k==='per'?'#ffe14a':'#4dff9a'; h.strokeStyle=col; h.lineWidth=2; const q=w*.28;
+    [[x,y,1,1],[x+w,y,-1,1],[x,y+w,1,-1],[x+w,y+w,-1,-1]].forEach(([a,b,sx,sy])=>{ h.beginPath(); h.moveTo(a,b+sy*q); h.lineTo(a,b); h.lineTo(a+sx*q,b); h.stroke(); });
+    m.conf = m.conf || (.86+R()*.12); const lab=m.lab+' '+m.conf.toFixed(2);
+    h.font='700 11px monospace'; const tw=h.measureText(lab).width+10; h.fillStyle='rgba(0,0,0,.65)'; h.fillRect(x,y-18,tw,16); h.fillStyle=col; h.fillText(lab,x+5,y-6);
+    h.font='10px monospace'; h.fillStyle='rgba(230,255,240,.8)'; h.fillText(m.id,x,y+w+12); });
+}
+const dl=document.getElementById('dl'), logEl=document.getElementById('log');
+setInterval(()=>{ document.getElementById('lat').textContent=(19+Math.round(R()*9))+' ms'; document.getElementById('fps').textContent=(29+R()*.9).toFixed(1)+' FPS';
+  document.getElementById('dc').textContent=dets.length+' IN FOV';
+  dl.innerHTML=dets.map(m=>'<li><span><span class="c '+m.k+'">'+m.lab+'</span><br><span class="k">'+m.id+' · '+m.sub+'</span></span><span class="k">'+(m.conf||.9).toFixed(2)+'<br>'+TE.mgrs(6000+m.x,-1500+m.y,4).split(' ').slice(2).join(' ')+'</span></li>').join(''); },700);
+document.getElementById('bEO').onclick=()=>{ IR=false; document.getElementById('bEO').classList.add('on'); document.getElementById('bIR').classList.remove('on'); };
+document.getElementById('bIR').onclick=()=>{ IR=true; document.getElementById('bIR').classList.add('on'); document.getElementById('bEO').classList.remove('on'); };
+document.getElementById('bAI').onclick=e=>{ AI=!AI; e.target.classList.toggle('on',AI); };
+document.getElementById('bSnap').onclick=()=>{ vidEl.style.outline='3px solid #fff'; setTimeout(()=>vidEl.style.outline='',120); TE.log(logEl,'SNAPSHOT SAVED · SPOTREP DRAFTED ('+dets.filter(m=>m.k==='mil').length+' MIL VEH)','c'); };
+const notes=[['EDGE AI: 2x MILITARY VEHICLE MOVING E ON MSR CACTUS','r'],['ANALYST: COMPOUND 3 — 2 DISMOUNTS OBSERVED AT GATE','w'],['EDGE AI: CIVILIAN TRAFFIC NOMINAL — 2 VEH','g'],['RAVEN 21: HOLDING ORBIT, FUEL 64%','c']];
+let ni=0; TE.log(logEl,'FMV LINK ESTABLISHED — INFERENCE RUNNING ON-DEVICE','g'); setInterval(()=>{ const n=notes[ni++%notes.length]; TE.log(logEl,n[0],n[1]); },6000);
+setInterval(()=>{ IR=!IR; document.getElementById('bIR').classList.toggle('on',IR); document.getElementById('bEO').classList.toggle('on',!IR); },45000);
+window.addEventListener('resize',resize); resize(); makeTile(); requestAnimationFrame(frame);
+</script></body></html>

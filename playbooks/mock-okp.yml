@@ -1,0 +1,14 @@
+---
+# Rehearsal stand-in for okp-deploy.yml / okp-remove.yml. Logs in to the target
+# for real but does not pull or start any container. Selected by MOCK_MODE=true.
+- name: (MOCK) Field Docs action
+  hosts: all
+  gather_facts: no
+  vars:
+    okp_action: deploy
+  tasks:
+    - name: Confirm we can reach and log in to the target
+      ansible.builtin.ping:
+    - name: Show what the real run would do
+      ansible.builtin.debug:
+        msg: "MOCK: would {{ okp_action }} the Offline Knowledge Portal container ({{ okp_image | default('rhokp') }})"

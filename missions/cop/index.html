@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TACEDGE — Tactical COP</title>
+<link rel="stylesheet" href="../shared/tacedge.css">
+<script src="../config.js" onerror="void 0"></script>
+<script src="../shared/vendor/milsymbol.js"></script>
+<script src="../shared/vendor/mgrs.min.js"></script>
+<script src="../shared/tacedge.js"></script>
+<style>
+.cop{position:absolute;inset:0;display:grid;grid-template-columns:250px 1fr 300px;gap:8px;padding:8px}
+.side{display:flex;flex-direction:column;gap:8px;min-height:0}
+.map{position:relative;border:1px solid var(--line2);border-radius:4px;overflow:hidden;background:#070b0a}
+.map canvas{position:absolute;inset:0;width:100%;height:100%}
+.tools{position:absolute;left:10px;top:10px;display:flex;gap:6px;z-index:5}
+.mapinfo{position:absolute;left:10px;bottom:10px;z-index:5;font:12px var(--mono);background:rgba(5,10,10,.82);border:1px solid var(--line);
+  padding:6px 10px;border-radius:3px;color:var(--dim)} .mapinfo b{color:var(--ink)}
+.north{position:absolute;right:12px;top:10px;z-index:5;width:38px;height:38px}
+.units li{cursor:pointer} .units li.sel{background:#10272a}
+.units .nm{color:var(--ink)} .units .st{font-size:11px}
+.str{color:var(--grn)} .str.a{color:var(--amb)} .str.r{color:var(--red)}
+.det{padding:10px 12px;font:12px/1.7 var(--mono)} .det .k{color:var(--dim);display:inline-block;width:92px}
+#log{flex:1;min-height:0}
+.legend{display:flex;gap:12px;padding:8px 12px;font:11px var(--mono);color:var(--dim)} .legend i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
+</style></head><body>
+<script>
+const body = TE.init({title:'Tactical Common Operating Picture', version: TE.mode==='degraded'?'COP v1.2':'COP v1.3', sub:'TF 1-64 AR · BDE NET', callsign:'LANCER 6'});
+body.innerHTML = `
+<div class="cop">
+  <div class="side">
+    <div class="panel"><h3>LAYERS</h3><div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px" id="layers"></div></div>
+    <div class="panel" style="flex:1;min-height:0;overflow:hidden"><h3>FORCE TRACKER <em id="ucount"></em></h3><ul class="list units" id="units"></ul></div>
+    <div class="panel"><div class="legend"><span><i style="background:#80e0ff"></i>FRIENDLY</span><span><i style="background:#ff8080"></i>OPFOR</span><span><i style="background:#ffff80"></i>UNKNOWN</span></div></div>
+  </div>
+  <div class="map scan" id="map"><canvas id="tc"></canvas><canvas id="oc"></canvas>
+    <svg class="north" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="rgba(5,10,10,.8)" stroke="#2a4449"/><path d="M20 6l6 18-6-4-6 4z" fill="#4dff9a"/><text x="20" y="35" fill="#7f9a90" font-size="8" text-anchor="middle" font-family="monospace">N</text></svg>
+    <div class="mapinfo" id="mi">CURSOR <b id="cur">—</b> &nbsp; SCALE <b id="scl"></b></div>
+  </div>
+  <div class="side">
+    <div class="panel"><h3>SELECTED <em id="selid">—</em></h3><div class="det" id="det">Tap a unit symbol or a row in the force tracker.</div></div>
+    <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column"><h3>SITREP / SPOTREP FEED <em id="feed">LIVE</em></h3><div class="log" id="log"></div></div>
+  </div>
+</div>`;
+
+const DEG = TE.mode==='degraded';
+const R = TE.rng(4242), T = TE.Terrain(11);
+const tc=document.getElementById('tc'), oc=document.getElementById('oc'), mapEl=document.getElementById('map');
+const tx=tc.getContext('2d'), ox=oc.getContext('2d');
+let W=0,H=0,DPR=1, view={cx:0,cy:0,mpp:20};
+const L={terrain:true,grid:true,graphics:true,friendly:true,enemy:true};
+
+// --- forces (meters from AO center; +y north) ---
+const U=[
+ {id:'HQ',cs:'LANCER 6',  nm:'TF 1-64 AR TAC',  sidc:'SFGPUCA---AF---', x:-8200,y:-3900, str:96, act:'C2 / TAC CP'},
+ {id:'A', cs:'APACHE 6',  nm:'A CO (ARMOR)',     sidc:'SFGPUCA----E---', x:-6000,y:-1800, str:92, act:'ATTACK BY FIRE', path:[[-6000,-1800],[-3100,-600],[-900,700]]},
+ {id:'B', cs:'BULLDOG 6', nm:'B CO (MECH INF)',  sidc:'SFGPUCIZ---E---', x:-6600,y:-5200, str:88, act:'MOVEMENT TO CONTACT', path:[[-6600,-5200],[-3800,-4300],[-1200,-3000]]},
+ {id:'C', cs:'COMANCHE 6',nm:'C CO (ARMOR)',     sidc:'SFGPUCA----E---', x:-9400,y:-700,  str:74, act:'SUPPORT BY FIRE', path:[[-9400,-700],[-7600,400]]},
+ {id:'S', cs:'SABER 2',   nm:'SCT PLT',          sidc:'SFGPUCR----D---', x:-4200,y:-2400, str:100,act:'SCREEN / OBSERVE', path:[[-4200,-2400],[-2000,-1600],[-2600,-200]]},
+ {id:'F', cs:'STEEL 6',   nm:'B BTRY 3-82 FA',   sidc:'SFGPUCF----E---', x:-10600,y:-4700,str:97, act:'FIRES — READY'},
+ {id:'U1',cs:'RAVEN 21',  nm:'UAS (GRP 2)',       sidc:'SFAPMFQ--------', x:-2000,y:200,  str:100,act:'ISR ORBIT OBJ FALCON', orbit:[1500,900,2600]},
+ {id:'E1',cs:'',          nm:'OPFOR MECH CO (+)', sidc:'SHGPUCIZ---E---', x:3600,y:1800,  str:0, act:'DEFEND', hostile:1, drift:1},
+ {id:'E2',cs:'',          nm:'OPFOR ARMOR PLT',   sidc:'SHGPUCA----D---', x:5200,y:-900,  str:0, act:'COUNTERATTACK RSV', hostile:1, drift:1},
+ {id:'E3',cs:'',          nm:'OPFOR ADA SECTION', sidc:'SHGPUCD----C---', x:6900,y:3100,  str:0, act:'AIR DEFENSE', hostile:1},
+ {id:'E4',cs:'',          nm:'OPFOR RECON',       sidc:'SHGPUCR----C---', x:1200,y:-2600, str:0, act:'OBSERVE', hostile:1, drift:1, hidden:1},
+ {id:'X1',cs:'',          nm:'UNK VEHICLES (2)',  sidc:'SUGPUC-----B---', x:2600,y:4300,  str:0, act:'UNKNOWN', unk:1, hidden:1},
+];
+U.forEach(u=>{u.t=0; u.sx=u.x; u.sy=u.y;});
+const PL=[{n:'PL COPPER',x:-2600},{n:'PL IRON',x:1600}];
+const OBJ={n:'OBJ FALCON',pts:[[2200,600],[4800,-400],[6400,1700],[5200,3700],[2600,3200]]};
+const AA ={n:'AA THUNDER',pts:[[-11200,-6000],[-8600,-6600],[-7600,-4600],[-9800,-3600]]};
+const AXIS=[[-8400,-3000],[-5200,-1500],[-1800,-200],[2600,1400]];
+
+let sel=null;
+function resize(){
+  const r=mapEl.getBoundingClientRect(); DPR=Math.min(window.devicePixelRatio||1,2); W=r.width; H=r.height;
+  [tc,oc].forEach(c=>{c.width=W*DPR;c.height=H*DPR;});
+  view.mpp = 19500/W; view.cx=-1900; view.cy=-400;
+  tx.setTransform(DPR,0,0,DPR,0,0); ox.setTransform(DPR,0,0,DPR,0,0);
+  drawTerrain(); document.getElementById('scl').textContent='1 px = '+Math.round(view.mpp)+' m';
+}
+const w2s=(x,y)=>[W/2+(x-view.cx)/view.mpp, H/2-(y-view.cy)/view.mpp];
+const s2w=(sx,sy)=>[view.cx+(sx-W/2)*view.mpp, view.cy-(sy-H/2)*view.mpp];
+function drawTerrain(){
+  tx.clearRect(0,0,W,H);
+  if(DEG){ // tiles failed: checkerboard + error
+    for(let y=0;y<H;y+=64)for(let x=0;x<W;x+=64){tx.fillStyle=((x+y)/64)%2?'#0b1112':'#0e1517';tx.fillRect(x,y,64,64);}
+    tx.fillStyle='#3a1a1a'; tx.font='600 13px monospace'; for(let y=32;y<H;y+=128)for(let x=32;x<W;x+=192) tx.fillText('TILE ERR 503',x,y);
+    return; }
+  if(L.terrain) T.render(tx,W,H,view,{scale:.5,palette:[[12,17,13],[22,28,20],[36,40,29],[52,52,38],[70,66,50]],tint:'rgba(0,20,10,.18)'});
+}
+function poly(pts,stroke,dash,fill,lw){ ox.beginPath(); pts.forEach((p,i)=>{const s=w2s(p[0],p[1]); i?ox.lineTo(s[0],s[1]):ox.moveTo(s[0],s[1]);}); ox.closePath();
+  if(fill){ox.fillStyle=fill;ox.fill();} ox.setLineDash(dash||[]); ox.lineWidth=lw||2; ox.strokeStyle=stroke; ox.stroke(); ox.setLineDash([]); }
+function label(t,x,y,c,bg){ ox.font='700 11px monospace'; const w=ox.measureText(t).width+8; if(bg){ox.fillStyle='rgba(4,8,8,.75)'; ox.fillRect(x-w/2,y-9,w,15);} ox.fillStyle=c; ox.textAlign='center'; ox.fillText(t,x,y+2); ox.textAlign='left'; }
+function draw(){
+  ox.clearRect(0,0,W,H);
+  if(L.grid){ ox.lineWidth=1; ox.strokeStyle='rgba(120,200,160,.16)'; ox.font='10px monospace'; ox.fillStyle='rgba(150,220,180,.55)';
+    const g=1000, [x0,y1]=s2w(0,0), [x1,y0]=s2w(W,H);
+    for(let x=Math.ceil(x0/g)*g;x<x1;x+=g){const s=w2s(x,0)[0]; ox.beginPath(); ox.moveTo(s,0); ox.lineTo(s,H); ox.stroke(); ox.fillText(String(((Math.round(x/g)+40)%100+100)%100).padStart(2,'0'),s+3,12);}
+    for(let y=Math.ceil(y0/g)*g;y<y1;y+=g){const s=w2s(0,y)[1]; ox.beginPath(); ox.moveTo(0,s); ox.lineTo(W,s); ox.stroke(); ox.fillText(String(((Math.round(y/g)+77)%100+100)%100).padStart(2,'0'),3,s-3);} }
+  if(L.graphics){
+    poly(AA.pts,'#80e0ff',[6,4],'rgba(80,180,255,.07)'); { const c=w2s(-9300,-5200); label(AA.n,c[0],c[1],'#9fe7ff',1); }
+    poly(OBJ.pts,'#ff6b6b',[8,5],'rgba(255,60,60,.08)',2.5); { const c=w2s(4300,1700); label(OBJ.n,c[0],c[1],'#ff9a9a',1); }
+    PL.forEach(p=>{ const a=w2s(p.x,-9000), b=w2s(p.x+900,9000); ox.setLineDash([14,6]); ox.lineWidth=2; ox.strokeStyle='rgba(235,240,230,.75)';
+      ox.beginPath(); ox.moveTo(a[0],a[1]); ox.lineTo(b[0],b[1]); ox.stroke(); ox.setLineDash([]); label(p.n,(a[0]+b[0])/2+4,24,'#e8efe6',1); label(p.n,(a[0]+b[0])/2,H-40,'#e8efe6',1); });
+    // axis of advance
+    ox.lineWidth=12; ox.strokeStyle='rgba(90,170,255,.22)'; ox.lineJoin='round'; ox.beginPath(); AXIS.forEach((p,i)=>{const s=w2s(p[0],p[1]); i?ox.lineTo(s[0],s[1]):ox.moveTo(s[0],s[1]);}); ox.stroke();
+    const e=w2s(...AXIS[3]), f=w2s(...AXIS[2]), ang=Math.atan2(e[1]-f[1],e[0]-f[0]);
+    ox.fillStyle='rgba(90,170,255,.45)'; ox.beginPath(); ox.moveTo(e[0]+Math.cos(ang)*18,e[1]+Math.sin(ang)*18); ox.lineTo(e[0]+Math.cos(ang+2.3)*16,e[1]+Math.sin(ang+2.3)*16); ox.lineTo(e[0]+Math.cos(ang-2.3)*16,e[1]+Math.sin(ang-2.3)*16); ox.fill();
+    { const m=w2s(-3400,-850); label('AXIS LANCE',m[0],m[1]-14,'#9fd0ff',1); }
+    // fires range ring
+    const fb=U.find(u=>u.id==='F'), c=w2s(fb.x,fb.y); ox.setLineDash([3,6]); ox.strokeStyle='rgba(128,224,255,.35)'; ox.lineWidth=1.5;
+    ox.beginPath(); ox.arc(c[0],c[1],14000/view.mpp,0,7); ox.stroke(); ox.setLineDash([]);
+  }
+  // units
+  const now=performance.now()/1000;
+  U.forEach(u=>{
+    if(u.hidden) return; if(u.hostile||u.unk){ if(!L.enemy) return; } else if(!L.friendly) return;
+    const s=w2s(u.x,u.y); const sy=TE.sym(u.sidc,u.sidc[2]==='A'?20:24,{uniqueDesignation:u.cs?u.cs.split(' ')[0]:'' });
+    if(u.flash && now-u.flash<6 && Math.floor(now*2)%2){ ox.strokeStyle='#ffe14a'; ox.lineWidth=2; ox.beginPath(); ox.arc(s[0],s[1],26,0,7); ox.stroke(); }
+    if(sel===u){ ox.strokeStyle='#4dff9a'; ox.lineWidth=1.5; ox.setLineDash([4,3]); ox.strokeRect(s[0]-sy.a.x-6,s[1]-sy.a.y-6,sy.sz.width+12,sy.sz.height+12); ox.setLineDash([]); }
+    // track history
+    if(u.hist&&u.hist.length>1){ ox.strokeStyle=u.hostile?'rgba(255,120,120,.35)':'rgba(128,224,255,.35)'; ox.lineWidth=1.5; ox.beginPath();
+      u.hist.forEach((p,i)=>{const q=w2s(p[0],p[1]); i?ox.lineTo(q[0],q[1]):ox.moveTo(q[0],q[1]);}); ox.stroke(); }
+    ox.drawImage(sy.c,s[0]-sy.a.x,s[1]-sy.a.y);
+    u.sx=s[0]; u.sy=s[1];
+  });
+}
+// --- simulation ---
+function step(dt){
+  if(DEG) return;
+  U.forEach(u=>{
+    u.hist=u.hist||[];
+    if(u.path){ u.t=Math.min(1,u.t+dt/600); const n=u.path.length-1, k=Math.min(n-1,Math.floor(u.t*n)), f=u.t*n-k, a=u.path[k], b=u.path[k+1];
+      u.x=TE.lerp(a[0],b[0],f); u.y=TE.lerp(a[1],b[1],f); }
+    else if(u.orbit){ const a=performance.now()/1000/25; u.x=u.orbit[0]+Math.cos(a)*u.orbit[2]; u.y=u.orbit[1]+Math.sin(a)*u.orbit[2]*.6; }
+    else if(u.drift){ u.x+=(R()-.5)*14; u.y+=(R()-.5)*14; }
+    if(!u.hlast||performance.now()-u.hlast>4000){ u.hist.push([u.x,u.y]); if(u.hist.length>14) u.hist.shift(); u.hlast=performance.now(); }
+  });
+}
+let last=performance.now(); function loop(t){ const dt=TE.clamp((t-last)/1000,0,.1); last=t; step(dt); draw(); requestAnimationFrame(loop); }
+
+// --- panels ---
+const ul=document.getElementById('units');
+function strCls(v){return v>=85?'':v>=70?'a':'r';}
+function renderUnits(){
+  ul.innerHTML=''; const vis=U.filter(u=>!u.hidden);
+  document.getElementById('ucount').textContent=vis.length+' TRACKS';
+  vis.forEach(u=>{ const li=document.createElement('li'); if(sel===u) li.className='sel';
+    li.innerHTML='<span><span class="nm">'+(u.cs||u.nm)+'</span><br><span class="k st">'+(u.cs?u.nm:u.act)+'</span></span>'+
+      (u.hostile?'<span class="str r">HOSTILE</span>':u.unk?'<span class="str a">UNK</span>':'<span class="str '+strCls(u.str)+'">'+u.str+'%</span>');
+    li.onclick=()=>select(u); ul.appendChild(li); });
+}
+function select(u){ sel=u; document.getElementById('selid').textContent=u.cs||u.id; renderDet(); renderUnits(); }
+function renderDet(){ if(!sel) return; const u=sel;
+  document.getElementById('det').innerHTML=
+    '<div><span class="k">UNIT</span>'+u.nm+'</div>'+(u.cs?'<div><span class="k">CALLSIGN</span>'+u.cs+'</div>':'')+
+    '<div><span class="k">AFFIL</span>'+(u.hostile?'<span style="color:var(--red)">HOSTILE (OPFOR)</span>':u.unk?'<span style="color:var(--yel)">UNKNOWN</span>':'<span style="color:var(--cyn)">FRIENDLY</span>')+'</div>'+
+    '<div><span class="k">LOCATION</span>'+TE.mgrs(u.x,u.y)+'</div>'+
+    '<div><span class="k">ACTIVITY</span>'+u.act+'</div>'+
+    (u.hostile||u.unk?'<div><span class="k">SOURCE</span>'+(u.id==='E3'?'ELINT / SIGINT':'UAS EO/IR · SCT PLT')+'</div><div><span class="k">CONFIDENCE</span>'+(u.unk?'LOW':'HIGH')+'</div>':
+     '<div><span class="k">STRENGTH</span>'+u.str+'%</div><div><span class="k">CLASS III</span>'+(60+((u.str*7)%35))+'%</div><div><span class="k">CLASS V</span>'+(55+((u.str*3)%40))+'%</div>')+
+    '<div><span class="k">LAST RPT</span>'+(DEG?'47 MIN AGO':TE.hms())+'</div>';
+}
+setInterval(renderDet,2000);
+oc.addEventListener('pointerdown',e=>{ const r=oc.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top;
+  let best=null,bd=30; U.forEach(u=>{ if(u.hidden||u.sx==null) return; const d=Math.hypot(u.sx-x,u.sy-y); if(d<bd){bd=d;best=u;} }); if(best) select(best); });
+oc.addEventListener('pointermove',e=>{ const r=oc.getBoundingClientRect(); const w=s2w(e.clientX-r.left,e.clientY-r.top); document.getElementById('cur').textContent=TE.mgrs(w[0],w[1]); });
+
+const lay=document.getElementById('layers');
+[['terrain','TERRAIN'],['grid','MGRS GRID'],['graphics','GRAPHICS'],['friendly','FRIENDLY'],['enemy','OPFOR']].forEach(([k,n])=>{
+  const b=document.createElement('button'); b.className='te-btn on'; b.textContent=n;
+  b.onclick=()=>{ L[k]=!L[k]; b.classList.toggle('on',L[k]); if(k==='terrain') drawTerrain(); }; lay.appendChild(b); });
+
+const log=document.getElementById('log');
+const msgs=[
+ ['APACHE 6: SET IN ATTACK-BY-FIRE POSITION, OBSERVING OBJ FALCON',''],
+ ['RAVEN 21: SPOTREP — 4x BMP, 2x T-72 VIC '+TE.mgrs(3600,1800,4),'r'],
+ ['STEEL 6: BTRY LAID AND READY, AZ 1080 MILS','c'],
+ ['BULLDOG 6: CROSSING PL COPPER','g'],
+ ['SABER 2: OBSERVED DISMOUNTED OP ON HILL 781','w'],
+ ['LANCER 6: ALL ELEMENTS REPORT LACE NLT 1830Z',''],
+ ['RAVEN 21: ADA RADAR EMITTING VIC OBJ FALCON — ACTIVATING STANDOFF','r'],
+ ['COMANCHE 6: 2 VEHICLES NMC, CLASS IX REQ SUBMITTED','w'],
+ ['BDE: FRAGO 3 RECEIVED — AXIS LANCE REMAINS PRIORITY','c'],
+];
+let mi=0;
+if(DEG){
+  TE.degradedBanner(mapEl,'DATA FEED STALE — LAST UPDATE 47 MIN AGO','MAP TILE SERVICE: CONNECTION REFUSED · TRACK FEED: CONFIG ERROR (feed.endpoint)');
+  document.getElementById('feed').textContent='OFFLINE'; document.getElementById('feed').style.color='var(--red)';
+  ['ERR feed.endpoint unresolved — check mission config','ERR tile cache: 0 of 412 tiles loaded','WARN tracks frozen at last known position','ERR SITREP queue stalled (47 min)'].forEach(m=>TE.log(log,m,'r'));
+} else {
+  const push=()=>{ const m=msgs[mi++%msgs.length]; TE.log(log,m[0],m[1]);
+    if(mi===4){ const e=U.find(u=>u.id==='E4'); e.hidden=0; e.flash=performance.now()/1000; TE.log(log,'SABER 2: NEW CONTACT — OPFOR RECON VIC '+TE.mgrs(e.x,e.y,4),'r'); renderUnits(); }
+    if(mi===8){ const e=U.find(u=>u.id==='X1'); e.hidden=0; e.flash=performance.now()/1000; TE.log(log,'RAVEN 21: UNK VEHICLES MOVING SOUTH — REQ ID','w'); renderUnits(); } };
+  for(let i=0;i<3;i++) push(); setInterval(push,6500);
+}
+window.addEventListener('resize',resize); resize(); renderUnits(); select(U[1]); requestAnimationFrame(loop);
+</script></body></html>

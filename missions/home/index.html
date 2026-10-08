@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TACEDGE — Standby</title>
+<link rel="stylesheet" href="../shared/tacedge.css">
+<script src="../config.js" onerror="void 0"></script>
+<script src="../shared/vendor/milsymbol.js"></script>
+<script src="../shared/vendor/mgrs.min.js"></script>
+<script src="../shared/tacedge.js"></script>
+<style>
+.hm{position:absolute;inset:0;display:grid;grid-template-columns:1fr 420px;gap:8px;padding:8px}
+.hero{position:relative;border:1px solid var(--line2);border-radius:4px;overflow:hidden;background:radial-gradient(circle at 50% 50%,#0c1c1a,#040808 70%)}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%}
+.hero .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
+.hero svg{width:120px;height:120px;filter:drop-shadow(0 0 18px rgba(77,255,154,.35))}
+.hero h2{margin:0;font:700 34px var(--mono);letter-spacing:.3em}
+.hero p{margin:0;font:14px var(--mono);color:var(--dim);letter-spacing:.14em}
+.hero .st{font:700 15px var(--mono);color:var(--amb);letter-spacing:.2em;border:1px solid #6a4a10;padding:10px 18px;border-radius:3px;background:rgba(40,28,4,.6)}
+.side{display:flex;flex-direction:column;gap:8px;min-height:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;padding:12px 14px;font:12.5px var(--mono)} .kv span:nth-child(odd){color:var(--dim)}
+.pr li span:last-child{color:var(--dim)}
+</style></head><body>
+<script>
+const body=TE.init({title:'Device Standby', version:'BASE '+(window.MISSION_VERSION||'v1.0'), sub:'AWAITING MISSION PROFILE', callsign:'UNASSIGNED'});
+body.innerHTML=`
+<div class="hm">
+  <div class="hero scan"><canvas id="hc"></canvas><div class="c">${TE.logo.replace('<svg','<svg')}
+    <h2>TACEDGE</h2><p>MISSION SUITE · EDGE DEVICE</p><div class="st blink">STANDBY — AWAITING MISSION ASSIGNMENT</div>
+    <p style="font-size:12px;color:var(--faint)">Mission profiles are delivered as bootable container images and applied atomically.</p></div></div>
+  <div class="side">
+    <div class="panel"><h3>DEVICE</h3><div class="kv">
+      <span>DEVICE ID</span><span>${TE.unit}</span><span>PLATFORM</span><span>RUGGED TABLET / LAPTOP</span>
+      <span>OPERATING SYSTEM</span><span>Red Hat Enterprise Linux · image mode</span><span>DEPLOYED IMAGE</span><span>${TE.tag||'base'}</span>
+      <span>UPDATE MODEL</span><span>TRANSACTIONAL · ROLLBACK READY</span><span>CONNECTIVITY</span><span id="conn">LOCAL MESH</span>
+      <span>POSITION</span><span id="pos"></span><span>TIME</span><span id="tm"></span></div></div>
+    <div class="panel" style="flex:1;min-height:0"><h3>AVAILABLE MISSION PROFILES</h3><ul class="list pr">
+      <li><span>TACTICAL COP</span><span>cop</span></li><li><span>COUNTER-UAS · AIR PICTURE</span><span>cuas</span></li><li><span>ISR FMV · EDGE AI</span><span>isr</span></li>
+      <li><span>TACTICAL NETWORK OPS</span><span>netops</span></li><li><span>SUSTAINMENT · LOGSTAT</span><span>sustain</span></li></ul>
+      <div style="padding:12px 14px;font:12px var(--mono);color:var(--dim);line-height:1.6">Profiles are pushed from the mission controller. Field documentation is available offline via <b style="color:var(--ink)">DOCS</b> once deployed.</div></div>
+  </div>
+</div>`;
+document.getElementById('pos').textContent=TE.mgrs(-8200,-3900);
+setInterval(()=>document.getElementById('tm').textContent=TE.dtg(),1000);
+const hc=document.getElementById('hc'), X=hc.getContext('2d'); let W,H;
+function rs(){ const r=hc.getBoundingClientRect(), d=Math.min(devicePixelRatio||1,2); W=r.width; H=r.height; hc.width=W*d; hc.height=H*d; X.setTransform(d,0,0,d,0,0); }
+function fr(){ const t=performance.now()/1000; X.clearRect(0,0,W,H);
+  for(let i=0;i<4;i++){ const r=((t*40+i*90)%360); X.strokeStyle='rgba(77,255,154,'+(.22*(1-r/360))+')'; X.lineWidth=1.5; X.beginPath(); X.arc(W/2,H/2,r+40,0,7); X.stroke(); }
+  X.strokeStyle='rgba(77,255,154,.06)'; for(let x=0;x<W;x+=48){X.beginPath();X.moveTo(x,0);X.lineTo(x,H);X.stroke();} for(let y=0;y<H;y+=48){X.beginPath();X.moveTo(0,y);X.lineTo(W,y);X.stroke();}
+  requestAnimationFrame(fr); }
+addEventListener('resize',rs); rs(); fr();
+</script></body></html>

@@ -39,7 +39,9 @@ All knobs are environment variables / `deploy/vars.yml` — no code edits:
 | `TARGET_IPS` | `192.168.8.101,192.168.8.102` | Toughbook(s) being re-imaged (comma-separated) |
 | `REGISTRY_HOST` | `192.168.8.100:5000` | registry serving the images (on the tablet) |
 | `IMAGE_REPO` | `bootc-flightgear` | image repo name |
-| `WORKLOADS` | `f22,b52,f35,f35-fixed,base` | allow-list; must match the buttons |
+| `WORKLOADS` | `cop,cuas,isr,netops,sustain,cop-degraded,home` | which mission buttons show (allow-list); unknown tags get a generic card |
+| `MOCK_MODE` | `false` | `true` = rehearsal playbooks (log in, but no switch/reboot/containers) |
+| `OKP_ACCESS_KEY` | — | enables the Field Docs (Offline Knowledge Portal) buttons |
 | `TARGET_SSH_USER` / `TARGET_SSH_PASS` / `TARGET_BECOME_PASS` | `core` / `edge` / `edge` | target login (rendered into `inventory.ini`, never committed) |
 
 ## Notes for this fork (booth hardening, Oct 2026)

@@ -1,0 +1,35 @@
+##
+## TACEDGE mission image: one bootc image per mission profile.
+## Layers a self-contained, offline web mission app on top of the existing
+## kiosk base image (RHEL image mode + GNOME kiosk + Firefox), so the
+## Toughbooks keep their users, network and registry settings across switches.
+##
+##   podman build -f missions/Containerfile --build-arg MISSION=cop -t <registry>/bootc-flightgear:cop missions/
+##
+ARG BASE_IMAGE=192.168.8.100:5000/bootc-flightgear:base
+FROM ${BASE_IMAGE}
+
+ARG MISSION=cop
+ARG MODE=nominal
+ARG TAG=cop
+ARG VERSION=v1.0
+
+# mission content (read-only, lives in /usr so it is part of the image)
+COPY shared /usr/share/kiosk-mode/missions/shared
+COPY ${MISSION} /usr/share/kiosk-mode/missions/${MISSION}
+
+# quiet, kiosk-friendly Firefox (no first-run pages, no update prompts)
+COPY firefox-policies.json /etc/firefox/policies/policies.json
+
+# per-image config + kiosk launcher pointing at this mission
+RUN    mkdir -p /usr/share/kiosk-mode/bin \
+    && printf 'window.MISSION_MODE="%s";\nwindow.MISSION_TAG="%s";\nwindow.MISSION_VERSION="%s";\n' "$MODE" "$TAG" "$VERSION" \
+           > /usr/share/kiosk-mode/missions/config.js \
+    && printf '#!/bin/sh\nsleep 3\nfirefox -kiosk "file:///usr/share/kiosk-mode/missions/%s/index.html"\nsleep 1\nexec "$0" "$@"\n' "$MISSION" \
+           > /usr/share/kiosk-mode/bin/gnome-kiosk-script \
+    && chmod 0755 /usr/share/kiosk-mode/bin/gnome-kiosk-script \
+    && (id kiosk >/dev/null 2>&1 && chown -R kiosk: /usr/share/kiosk-mode || true)
+
+LABEL org.opencontainers.image.title="tacedge-${MISSION}" \
+      org.opencontainers.image.description="TACEDGE mission profile (${MISSION}, ${MODE}) — simulated demo content" \
+      org.opencontainers.image.version="${VERSION}"

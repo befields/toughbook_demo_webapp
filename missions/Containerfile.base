@@ -1,0 +1,25 @@
+##
+## FALLBACK kiosk base — only needed if the existing "base" image from the
+## flightgear-kiosk-demo is NOT available. Same pattern: RHEL image mode +
+## GNOME kiosk + Firefox, auto-login "kiosk" user, insecure local registry.
+## Build on a subscribed RHEL 9 host (dnf needs RHEL repos):
+##   podman build -f missions/Containerfile.base -t 192.168.8.100:5000/bootc-flightgear:base missions/
+##
+ARG BASE_IMAGE=registry.redhat.io/rhel9/rhel-bootc:9.6
+FROM ${BASE_IMAGE}
+ARG REGISTRY=192.168.8.100:5000
+RUN    mkdir -p /etc/containers/registries.conf.d \
+    && printf '[[registry]]\nlocation = "%s"\ninsecure = true\n' "$REGISTRY" > /etc/containers/registries.conf.d/999-local-registry.conf
+RUN    dnf install -y gnome-shell gnome-kiosk gnome-kiosk-script-session firefox python3 \
+    && dnf -y clean all \
+    && systemctl mask bootc-fetch-apply-updates.timer \
+    && systemctl set-default graphical.target
+RUN    useradd -m kiosk && passwd -d kiosk \
+    && mkdir -p /usr/share/kiosk-mode/bin \
+    && printf '#!/bin/sh\nsleep 3\nfirefox -kiosk about:blank\nsleep 1\nexec "$0" "$@"\n' > /usr/share/kiosk-mode/bin/gnome-kiosk-script \
+    && chmod 0755 /usr/share/kiosk-mode/bin/gnome-kiosk-script && chown -R kiosk: /usr/share/kiosk-mode \
+    && sed -i.bak "/^\[daemon\]/aAutomaticLoginEnable=True\nAutomaticLogin=kiosk" /etc/gdm/custom.conf \
+    && mkdir -p /var/lib/AccountsService/users \
+    && printf '[User]\nSession=gnome-kiosk-script\nSystemAccount=false' > /var/lib/AccountsService/users/kiosk \
+    && mkdir -p /home/kiosk/.local/bin && ln -sf /usr/share/kiosk-mode/bin/gnome-kiosk-script /home/kiosk/.local/bin/ \
+    && chown -R kiosk: /home/kiosk

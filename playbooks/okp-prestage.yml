@@ -1,0 +1,15 @@
+---
+# Run the night before: copies the large (~9.5 GB) portal image onto each Toughbook
+# from the tablet registry, so the live "Deploy Field Docs" tap only starts it.
+#   ansible-playbook -i inventory.ini playbooks/okp-prestage.yml
+- name: Pre-stage the Offline Knowledge Portal image on the Toughbooks
+  hosts: all
+  gather_facts: no
+  become: yes
+  vars:
+    okp_image: "192.168.8.100:5000/rhokp-rhel9:latest"
+  tasks:
+    - name: Pull the portal image (this can take several minutes per device)
+      ansible.builtin.command: podman pull --tls-verify=false {{ okp_image }}
+      async: 3600
+      poll: 15

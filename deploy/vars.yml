@@ -22,7 +22,7 @@ registry_host: "{{ server_ip }}:5000"
 image_repo: "bootc-flightgear"
 
 # Workload tags wired to the buttons. Must match templates/index.html.
-workloads: "f22,b52,f35,f35-fixed,base"
+workloads: "cop,cuas,isr,netops,sustain,cop-degraded,home"
 
 # Stand up a local container registry ON THE TABLET.
 # Set false if your peer hosts the registry on a different box — then just

@@ -63,7 +63,7 @@ sudo systemctl start workload-selector
 > sudo podman run -d --name workload-selector --network host --restart always \
 >   -e TARGET_IPS=192.168.8.101,192.168.8.102 -e TARGET_SSH_USER=core \
 >   -e TARGET_SSH_PASS=edge -e TARGET_BECOME_PASS=edge \
->   -e REGISTRY_HOST=192.168.8.100:5000 -e WORKLOADS=f22,b52,f35,f35-fixed,base \
+>   -e REGISTRY_HOST=192.168.8.100:5000 -e OKP_ACCESS_KEY \
 >   localhost/workload-selector:latest
 > ```
 
@@ -148,7 +148,7 @@ You can prove the whole chain except the real bootc switch without the tablet:
 2. **Target** — spin a RHEL/Fedora VM (libvirt or your homelab) with sshd and a
    `core` / `edge` login to stand in for the Toughbook.
 3. **Registry** — `podman run -d -p 5000:5000 registry:2`, then push any image
-   tagged `bootc-flightgear:f22` so preflight's catalog check passes.
+   tagged `bootc-flightgear:cop` so preflight's catalog check passes.
 4. Run `./deploy/preflight.sh` and click the buttons at `http://localhost/`.
 
 **For a full green run on a non-bootc target**, run the app with mock playbooks
@@ -157,7 +157,7 @@ image swap and the reboot:
 ```
 podman run -d --name ws --network host \
   -e TARGET_IP=<your-target-vm-ip> \
-  -e SWITCH_PLAYBOOK=mock-switch.yml -e REBOOT_PLAYBOOK=mock-reboot.yml \
+  -e MOCK_MODE=true \
   localhost/workload-selector:latest
 ```
 
