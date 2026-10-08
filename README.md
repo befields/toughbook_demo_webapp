@@ -15,7 +15,9 @@ Ansible, which SSHes to the **Toughbook target** and runs
 
 ## Deploying
 
-**👉 See [`deploy/DEPLOY.md`](deploy/DEPLOY.md) for the full booth runbook.**
+**New to this? Start with [`deploy/PEER-SETUP.md`](deploy/PEER-SETUP.md)** — a plain, step-by-step booth guide for the person setting up the tablet.
+
+Full reference (options, host install, auto-start): [`deploy/DEPLOY.md`](deploy/DEPLOY.md).
 
 Two supported paths:
 
