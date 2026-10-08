@@ -36,7 +36,7 @@ for row in "${ALL[@]}"; do
   img="$REGISTRY/$REPO:$tag"
   echo ">> building $img  (mission=$dir mode=$mode)"
   podman build -f Containerfile \
-    --build-arg BASE_IMAGE="$BASE_IMAGE" --build-arg MISSION="$dir" \
+    --build-arg BASE_IMAGE="$BASE_IMAGE" --build-arg REGISTRY="$REGISTRY" --build-arg MISSION="$dir" \
     --build-arg MODE="$mode" --build-arg TAG="$tag" --build-arg VERSION="$ver" \
     -t "$img" .
   if [ "$PUSH" = "true" ]; then

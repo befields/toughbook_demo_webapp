@@ -106,6 +106,35 @@ Then open Firefox to **http://localhost:8080/**.
 3. **Rollback story:** tap **COP v1.2 (faulty)** — the Toughbook comes up with a stale-data/broken-map COP. Then tap **Tactical COP** — fixed, same device, one tap.
 4. **Field Docs:** tap **DEPLOY** under Field Apps — no reboot. On the Toughbook, tap **DOCS** in the top bar to open Red Hat docs offline.
 
+## How the Toughbooks get their images
+
+You never touch the Toughbooks during the demo. When you tap a mission, the
+controller (Ansible) logs in to each Toughbook and:
+
+1. tells it to trust the tablet registry `192.168.8.100:5000` (plain HTTP on the booth LAN),
+2. runs **`bootc switch 192.168.8.100:5000/bootc-flightgear:<mission>`** — the Toughbook pulls only the small layers it doesn't already have,
+3. reboots it into the new image.
+
+## Manual control on a Toughbook (backup if the tablet is down)
+
+Open a terminal on the Toughbook (or `ssh core@192.168.8.101`, password `edge`).
+
+See what's running and what's staged:
+
+    sudo bootc status
+
+Switch to a mission by hand (example: Counter-UAS), then reboot:
+
+    sudo bootc switch 192.168.8.100:5000/bootc-flightgear:cuas
+    sudo systemctl reboot
+
+Go back to the previous image (instant rollback), then reboot:
+
+    sudo bootc rollback
+    sudo systemctl reboot
+
+> If a manual `bootc switch` fails with *"server gave HTTP response to HTTPS client"*, the Toughbook doesn't trust the tablet registry yet. Tap any mission once from the controller (it installs the trust setting), or create `/etc/containers/registries.conf.d/999-tacedge-registry.conf` with `[[registry]]`, `location = "192.168.8.100:5000"`, `insecure = true`.
+
 ## If something breaks
 
 - **Controller page won't load:** `podman restart ws`, refresh the browser.

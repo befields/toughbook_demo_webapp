@@ -4,6 +4,15 @@
   gather_facts: no
   become: yes
   tasks:
+    - name: Trust the booth registry for image pulls (plain HTTP on the local LAN)
+      ansible.builtin.copy:
+        dest: /etc/containers/registries.conf.d/999-tacedge-registry.conf
+        mode: "0644"
+        content: |
+          [[registry]]
+          location = "{{ (target_image | default('192.168.8.100:5000/bootc-flightgear:' + bootc_image_tag)).split('/')[0] }}"
+          insecure = true
+
     - name: Switch to the specified BootC image
       community.general.bootc_manage:
         image: "{{ target_image | default('192.168.8.200:5000/bootc-flightgear:' + bootc_image_tag) }}"

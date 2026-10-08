@@ -14,6 +14,12 @@ ARG MODE=nominal
 ARG TAG=cop
 ARG VERSION=v1.0
 
+# trust the booth registry (plain HTTP on the local LAN) so later switches keep working
+ARG REGISTRY=192.168.8.100:5000
+RUN    mkdir -p /etc/containers/registries.conf.d \
+    && printf '[[registry]]\nlocation = "%s"\ninsecure = true\n' "$REGISTRY" \
+           > /etc/containers/registries.conf.d/999-tacedge-registry.conf
+
 # mission content (read-only, lives in /usr so it is part of the image)
 COPY shared /usr/share/kiosk-mode/missions/shared
 COPY ${MISSION} /usr/share/kiosk-mode/missions/${MISSION}
