@@ -46,8 +46,10 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "!! These images are NOT in the registry yet: ${missing[*]}"
   echo "   Build/push them first (TACEDGE: ./missions/build-missions.sh, FlightGear: your flightgear-kiosk-demo build)."
   if [ "${FORCE:-0}" != 1 ]; then echo "   Stopping. (FORCE=1 $0 $MODE to start anyway.)"; exit 1; fi
+  echo "   registry check: FORCED — those buttons will fail until the images are pushed"
+else
+  echo "   registry check: OK"
 fi
-echo "   registry check: OK"
 
 # 2. Field Docs key from the podman secret, if it exists
 secret_args=()
