@@ -66,7 +66,9 @@ const noise=document.createElement('canvas'); noise.width=256; noise.height=256;
 function resize(){ const r=vidEl.getBoundingClientRect(); DPR=Math.min(devicePixelRatio||1,2); W=r.width; H=r.height;
   [vc,hc].forEach(c=>{c.width=W*DPR;c.height=H*DPR;}); V.setTransform(DPR,0,0,DPR,0,0); Hx.setTransform(DPR,0,0,DPR,0,0); }
 let cam={x:180,y:60,rot:0,zoom:1.25}, dets=[];
-function frame(){
+let lastF=0;
+function frame(ts){
+  requestAnimationFrame(frame); if(ts-lastF<32) return; const fdt=Math.min(.1,(ts-lastF)/1000)||.033; lastF=ts; // capped ~30 fps
   const now=performance.now()/1000;
   cam.rot = Math.sin(now/40)*.35 + now*.01; cam.x=170+Math.cos(now/23)*35; cam.y=70+Math.sin(now/29)*28;
   const k=cam.zoom/MPP; // px per meter
@@ -79,7 +81,7 @@ function frame(){
   const w2s=(x,y)=>{ const dx=(x-cam.x)*k, dy=-(y-cam.y)*k; return [W/2+dx*c-dy*s, H/2+dx*s+dy*c]; };
   dets=[];
   movers.forEach(m=>{ let x,y,a; if(m.fixed){ x=m.fixed[0]+Math.sin(now*.7+m.fixed[1])*1.2; y=m.fixed[1]+Math.cos(now*.5)*1; a=0; }
-    else { m.t+=m.v/60; const q=pathPt(m.p,m.t); x=q[0]; y=q[1]; a=q[2]; }
+    else { m.t+=m.v*fdt; const q=pathPt(m.p,m.t); x=q[0]; y=q[1]; a=q[2]; }
     const p=w2s(x,y); m.sx=p[0]; m.sy=p[1]; m.x=x; m.y=y;
     V.save(); V.translate(p[0],p[1]); V.rotate(cam.rot-a);
     if(m.fixed){ V.fillStyle='rgba(15,15,12,.5)'; V.beginPath(); V.ellipse(3,3,3.5,2,0,0,7); V.fill(); V.fillStyle=m.k==='per'?'#2c2a24':'#333'; V.beginPath(); V.arc(0,0,2.6*cam.zoom,0,7); V.fill(); }
@@ -95,7 +97,6 @@ function frame(){
   V.drawImage(noise,-(now*997%256),-(now*613%256),W+512,H+512);
   const vg=V.createRadialGradient(W/2,H/2,Math.min(W,H)*.35,W/2,H/2,Math.max(W,H)*.75); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,.6)'); V.fillStyle=vg; V.fillRect(0,0,W,H);
   hud(now,w2s);
-  requestAnimationFrame(frame);
 }
 function hud(now,w2s){
   const h=Hx; h.clearRect(0,0,W,H); const C='rgba(230,255,240,.92)'; h.strokeStyle=C; h.fillStyle=C; h.lineWidth=1.5; h.font='600 12px monospace';
