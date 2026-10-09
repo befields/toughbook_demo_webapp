@@ -20,8 +20,9 @@ Environment=REGISTRY_HOST=192.168.8.100:5000
 Environment=IMAGE_REPO=bootc-flightgear
 # Optional: limit/extend the mission buttons, e.g. add FlightGear tags if they work:
 # Environment=WORKLOADS=cop,cuas,isr,netops,sustain,cop-degraded,home,f35
-# Field Docs access key lives in a root-only file (one line: OKP_ACCESS_KEY=...)
-EnvironmentFile=/etc/tacedge/okp.env
+# Field Docs access key comes from the podman secret store (never the image or git).
+# Create it once as root:  read -rs K && printf '%s' "$K" | sudo podman secret create okp_key - && unset K
+Secret=okp_key,type=env,target=OKP_ACCESS_KEY
 Environment=PORT=80
 
 [Service]

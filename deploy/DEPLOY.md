@@ -63,7 +63,7 @@ sudo systemctl start workload-selector
 > sudo podman run -d --name workload-selector --network host --restart always \
 >   -e TARGET_IPS=192.168.8.101,192.168.8.102 -e TARGET_SSH_USER=core \
 >   -e TARGET_SSH_PASS=edge -e TARGET_BECOME_PASS=edge \
->   -e REGISTRY_HOST=192.168.8.100:5000 -e OKP_ACCESS_KEY \
+>   -e REGISTRY_HOST=192.168.8.100:5000 --secret okp_key,type=env,target=OKP_ACCESS_KEY \
 >   localhost/workload-selector:latest
 > ```
 

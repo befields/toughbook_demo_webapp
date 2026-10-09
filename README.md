@@ -41,7 +41,7 @@ All knobs are environment variables / `deploy/vars.yml` — no code edits:
 | `IMAGE_REPO` | `bootc-flightgear` | image repo name |
 | `WORKLOADS` | `cop,cuas,isr,netops,sustain,cop-degraded,home` | which mission buttons show (allow-list); unknown tags get a generic card |
 | `MOCK_MODE` | `false` | `true` = rehearsal playbooks (log in, but no switch/reboot/containers) |
-| `OKP_ACCESS_KEY` | — | enables the Field Docs (Offline Knowledge Portal) buttons |
+| `OKP_ACCESS_KEY` | — | enables Field Docs; supply it from a podman secret (`--secret okp_key,type=env,target=OKP_ACCESS_KEY`), never bake it into an image |
 | `TARGET_SSH_USER` / `TARGET_SSH_PASS` / `TARGET_BECOME_PASS` | `core` / `edge` / `edge` | target login (rendered into `inventory.ini`, never committed) |
 
 ## Notes for this fork (booth hardening, Oct 2026)

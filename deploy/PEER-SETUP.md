@@ -55,27 +55,43 @@ You should see `cop`, `cuas`, `isr`, `netops`, `sustain`, `cop-degraded`, `home`
     podman tag registry.redhat.io/offline-knowledge-portal/rhokp-rhel9:latest 192.168.8.100:5000/rhokp-rhel9:latest
     podman push --tls-verify=false 192.168.8.100:5000/rhokp-rhel9:latest
 
-## Step 5 — Load the access key (hidden) and start the controller
+## Step 5 — Store the access key as a secret (one time only)
 
-Load the key without showing it on screen — paste it and press Enter:
+Benny sends you the Offline Knowledge Portal access key privately (Signal, in person — never on the shared drive).
+You store it **once** in podman's secret store on the tablet. After this, nobody ever types it again.
 
-    read -rs OKP_ACCESS_KEY && export OKP_ACCESS_KEY
+Run this, then **paste the key and press Enter** (nothing shows on screen — that's on purpose):
 
-Start the controller:
+    read -rs K && printf '%s' "$K" | podman secret create okp_key - && unset K
+
+Check it's stored (you'll see the name, never the key):
+
+    podman secret ls
+
+You should see a line with `okp_key`.
+
+> Made a mistake? `podman secret rm okp_key` and run the command again.
+
+## Step 5b — Start the controller
 
     podman run -d --name ws --network host \
       -e TARGET_IPS=192.168.8.101,192.168.8.102 \
       -e TARGET_SSH_USER=core -e TARGET_SSH_PASS=edge -e TARGET_BECOME_PASS=edge \
       -e REGISTRY_HOST=192.168.8.100:5000 \
-      -e OKP_ACCESS_KEY \
+      --secret okp_key,type=env,target=OKP_ACCESS_KEY \
       -e PORT=8080 \
       localhost/workload-selector:latest
 
-(`-e OKP_ACCESS_KEY` with no value copies it from your terminal — it never appears in the command.)
+The `--secret` line hands the key to the controller at startup. It is not in the
+image, not in git, and not in the command you typed.
 
-Check: `podman ps` shows `ws` as `Up`.
+Check: `podman ps` shows `ws` as `Up`, and
 
-> Redo it? `podman rm -f ws` first, then re-run.
+    curl -s http://localhost:8080/healthz
+
+shows `"okp":true` (that means Field Docs is enabled).
+
+> Redo it? `podman rm -f ws` first, then re-run Step 5b. The secret stays — you don't redo Step 5.
 
 ## Step 6 — Pre-load Field Docs onto the Toughbooks (do this the night before)
 
@@ -140,6 +156,27 @@ Go back to the previous image (instant rollback), then reboot:
 - **Controller page won't load:** `podman restart ws`, refresh the browser.
 - **See what it's doing:** `podman logs ws` — or tap **SHOW ANSIBLE OUTPUT** in the panel.
 - **A mission failed:** the panel shows the real error and the Toughbook is NOT rebooted. Re-run preflight.
-- **Field Docs buttons greyed out:** the access key wasn't passed — redo Step 5.
+- **Field Docs buttons greyed out:** the controller didn't get the key. Check `podman secret ls` shows `okp_key`, then redo Step 5b.
+
+## After the show — teardown (do this before anyone packs up)
+
+The access key is tied to Benny's Red Hat account. Remove every copy:
+
+1. On the controller, select **ALL UNITS** and tap **REMOVE** under Field Apps (stops the portal on both Toughbooks).
+2. On the tablet, remove the controller:
+
+        podman rm -f ws
+
+3. On the tablet, delete the secret:
+
+        podman secret rm okp_key
+
+4. Confirm it's gone (no `okp_key` line):
+
+        podman secret ls
+
+5. Text Benny "teardown done".
+
+The portal **image** can stay on the devices — it holds no key. If you also want the disk space back, on each Toughbook: `sudo podman rmi 192.168.8.100:5000/rhokp-rhel9:latest`.
 
 *Deeper reference (host install, auto-start on boot, VM rehearsal) is in `DEPLOY.md`.*
