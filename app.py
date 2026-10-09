@@ -43,8 +43,15 @@ CATALOG = [
     {"id": "sustain", "label": "Sustainment", "desc": "LOGSTAT by unit, days of supply, convoy tracker", "icon": "box", "version": "LOG v2.2"},
     {"id": "cop-degraded", "label": "COP v1.2 (faulty)", "desc": "Bad build: stale data feed & broken map — show rollback/fix", "icon": "warn", "version": "COP v1.2", "fault": True},
     {"id": "home", "label": "Standby", "desc": "Known-good base screen — device awaiting mission", "icon": "home", "version": "BASE v1.0"},
+    # FlightGear images (built from the flightgear-kiosk-demo repo, same registry repo)
+    {"id": "f22", "label": "F-22 Flight Sim", "desc": "FlightGear F-22 scenario — full 3D flight simulator workload", "icon": "jet", "version": "FLIGHTGEAR"},
+    {"id": "b52", "label": "B-52 Flight Sim", "desc": "FlightGear B-52 scenario — full 3D flight simulator workload", "icon": "jet", "version": "FLIGHTGEAR"},
+    {"id": "f35", "label": "F-35 (faulty)", "desc": "Bad build of the F-35 scenario — show rollback/fix", "icon": "jet", "version": "FLIGHTGEAR", "fault": True},
+    {"id": "f35-fixed", "label": "F-35 (fixed)", "desc": "Corrected F-35 scenario — the fix for the faulty build", "icon": "jet", "version": "FLIGHTGEAR"},
+    {"id": "base", "label": "Kiosk Base", "desc": "Original kiosk base image the Toughbooks were installed from", "icon": "home", "version": "BASE"},
 ]
-_default_workloads = ",".join(c["id"] for c in CATALOG)
+# Default buttons = TACEDGE set. Use deploy/use-demo.sh (or WORKLOADS=...) for FlightGear or both.
+_default_workloads = "cop,cuas,isr,netops,sustain,cop-degraded,home"
 WORKLOADS = [w.strip() for w in os.environ.get("WORKLOADS", _default_workloads).split(",") if w.strip()]
 _known = {c["id"]: c for c in CATALOG}
 VISIBLE = [_known.get(w, {"id": w, "label": w.upper(), "desc": "Custom image", "icon": "box", "version": w}) for w in WORKLOADS]

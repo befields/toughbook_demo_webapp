@@ -74,24 +74,14 @@ You should see a line with `okp_key`.
 
 ## Step 5b — Start the controller
 
-    podman run -d --name ws --network host \
-      -e TARGET_IPS=192.168.8.101,192.168.8.102 \
-      -e TARGET_SSH_USER=core -e TARGET_SSH_PASS=edge -e TARGET_BECOME_PASS=edge \
-      -e REGISTRY_HOST=192.168.8.100:5000 \
-      --secret okp_key,type=env,target=OKP_ACCESS_KEY \
-      -e PORT=8080 \
-      localhost/workload-selector:latest
+    ./deploy/use-demo.sh tacedge
 
-The `--secret` line hands the key to the controller at startup. It is not in the
-image, not in git, and not in the command you typed.
+You should see `registry check: OK`, `field docs: ENABLED`, and
+`Controller is UP showing TACEDGE`.
 
-Check: `podman ps` shows `ws` as `Up`, and
-
-    curl -s http://localhost:8080/healthz
-
-shows `"okp":true` (that means Field Docs is enabled).
-
-> Redo it? `podman rm -f ws` first, then re-run Step 5b. The secret stays — you don't redo Step 5.
+- If it says images are **NOT in the registry**, go back to Step 3.
+- If it says **field docs: disabled**, go back to Step 5.
+- You can run this command again any time — it restarts the controller cleanly.
 
 ## Step 6 — Pre-load Field Docs onto the Toughbooks (do this the night before)
 
@@ -121,6 +111,59 @@ Then open Firefox to **http://localhost:8080/**.
 2. **Tap a mission card.** A panel shows *Switch image → Reboot → Mission online*. The Toughbook reboots into that mission (about 1–2 minutes).
 3. **Rollback story:** tap **COP v1.2 (faulty)** — the Toughbook comes up with a stale-data/broken-map COP. Then tap **Tactical COP** — fixed, same device, one tap.
 4. **Field Docs:** tap **DEPLOY** under Field Apps — no reboot. On the Toughbook, tap **DOCS** in the top bar to open Red Hat docs offline.
+
+## Choosing FlightGear or TACEDGE
+
+The tablet controller is the **same app** for both demos. The only difference is
+**which buttons it shows**. Both sets of images live side by side in the same
+registry, and the Toughbooks need **no changes** to run either one.
+
+| Demo | What it is | Command (on the tablet) |
+|---|---|---|
+| **TACEDGE** (default) | Army mission screens: COP, Counter-UAS, ISR, Network Ops, Sustainment, faulty COP, Standby | `./deploy/use-demo.sh tacedge` |
+| **FlightGear** | Flight-sim images: F-22, B-52, F-35 (faulty), F-35 (fixed), Kiosk Base | `./deploy/use-demo.sh flightgear` |
+| **Both** | COP, Counter-UAS, ISR, faulty COP, F-22, F-35 pair, Standby | `./deploy/use-demo.sh both` |
+
+The script checks the registry first. **If any image for your choice is missing,
+it stops and tells you which ones** — so a button that can't work never appears.
+
+### How to decide which one to use (do this during rehearsal)
+
+**1. Check which images exist.** On the tablet:
+
+    curl -s http://192.168.8.100:5000/v2/bootc-flightgear/tags/list
+
+- No `f22` / `b52` / `f35` / `f35-fixed` in the list → FlightGear isn't ready. Use **TACEDGE**. Stop here.
+- They're all there → go to step 2.
+
+**2. Start the controller with both sets:**
+
+    ./deploy/use-demo.sh both
+
+**3. Test FlightGear on one unit.** In the browser, select **UNIT 1**, tap **F-22 Flight Sim**.
+Watch the Toughbook. Wait for it to reboot and come up.
+
+- The flight sim starts and flies smoothly → FlightGear **passes**.
+- Black screen, crash, frozen, or it never comes back → FlightGear **fails**.
+
+**4. Test TACEDGE on the same unit.** Tap **Tactical COP**. It should come up within a couple of minutes with moving units.
+
+**5. Pick and set the final demo:**
+
+| FlightGear result | Run this on the tablet |
+|---|---|
+| **Passed** — and you want both | `./deploy/use-demo.sh both` |
+| **Passed** — and you want only FlightGear | `./deploy/use-demo.sh flightgear` |
+| **Failed** | `./deploy/use-demo.sh tacedge` |
+
+**6. Refresh the browser** on the tablet. The buttons now match your choice.
+
+> **If you're unsure, choose TACEDGE.** It's the tested one. A flight sim that
+> freezes in front of a customer costs more than it's worth.
+
+> **FlightGear build note:** when building the FlightGear images in the
+> `flightgear-kiosk-demo` repo, set `HOSTIP=192.168.8.100` in its `demo.conf`
+> so the images are pushed to the tablet's registry (the old default was `.200`).
 
 ## How the Toughbooks get their images
 
@@ -153,10 +196,10 @@ Go back to the previous image (instant rollback), then reboot:
 
 ## If something breaks
 
-- **Controller page won't load:** `podman restart ws`, refresh the browser.
+- **Controller page won't load:** run `./deploy/use-demo.sh tacedge` (or your choice) again, then refresh the browser.
 - **See what it's doing:** `podman logs ws` — or tap **SHOW ANSIBLE OUTPUT** in the panel.
 - **A mission failed:** the panel shows the real error and the Toughbook is NOT rebooted. Re-run preflight.
-- **Field Docs buttons greyed out:** the controller didn't get the key. Check `podman secret ls` shows `okp_key`, then redo Step 5b.
+- **Field Docs buttons greyed out:** the controller didn't get the key. Check `podman secret ls` shows `okp_key`, then run `./deploy/use-demo.sh tacedge` (or your choice) again.
 
 ## After the show — teardown (do this before anyone packs up)
 
