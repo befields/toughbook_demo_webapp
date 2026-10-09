@@ -22,6 +22,7 @@ button{font:inherit;color:inherit}
 .pill i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--grn);box-shadow:0 0 8px var(--grn);vertical-align:1px}
 .pill.w i{background:var(--amb);box-shadow:0 0 8px var(--amb)} .pill.r i{background:var(--red2);box-shadow:0 0 8px var(--red2)}
 .clock{font:700 14px var(--mono);letter-spacing:.08em;padding-left:6px}
+.rhlogo{height:28px;width:auto;margin-left:10px;padding-left:14px;border-left:1px solid var(--ln2)}
 main{padding:18px 22px 120px;max-width:1500px;margin:0 auto}
 .sec{margin:6px 0 22px}
 .sec h2{display:flex;align-items:baseline;gap:12px;margin:0 0 12px;font:700 13px var(--mono);letter-spacing:.2em;color:var(--dim)}
@@ -92,7 +93,7 @@ pre.on{display:block}
   <div class="logo"><svg viewBox="0 0 32 32"><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" fill="none" stroke="#ee0000" stroke-width="1.8"/><path d="M9 19l7-8 7 8M12 22l4-4.5 4 4.5" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
     <div><b>TACEDGE</b><small>MISSION CONTROLLER · RHEL IMAGE MODE · ANSIBLE</small></div></div>
   <div class="pills"><span class="pill" id="pReg"><i></i>REGISTRY</span><span class="pill" id="pUnits"><i></i>{{ targets|length }} UNITS</span>
-    <span class="pill{% if mock %} w{% endif %}" id="pMode"><i></i>{% if mock %}MOCK MODE{% else %}LIVE{% endif %}</span><span class="clock" id="clk"></span></div>
+    <span class="pill{% if mock %} w{% endif %}" id="pMode"><i></i>{% if mock %}MOCK MODE{% else %}LIVE{% endif %}</span><span class="clock" id="clk"></span><img class="rhlogo" src="static/redhat-logo.svg" alt="Red Hat" onerror="this.remove()"></div>
 </header>
 <main id="main">
   <section class="sec"><h2>TARGET UNITS <span>pick where the mission goes</span></h2>

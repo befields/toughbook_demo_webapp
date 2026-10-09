@@ -88,7 +88,7 @@
         '</div></div>'+
       '<div class="te-body" id="te-body"></div>'+
       '<div class="te-foot"><span>UNIT <b>'+(cfg.callsign||'BLACKHAWK 6')+'</b> · DEVICE '+TE.unit+' · AO <b>NTC / FT IRWIN (TRAINING)</b></span>'+
-        '<span class="rh">Red Hat Enterprise Linux <i>●</i> image mode · bootc'+(TE.tag?' · IMAGE '+TE.tag:'')+'</span></div>'+
+        '<span class="rh"><img class="rhl" src="../shared/brand/redhat-logo.svg" alt="Red Hat" onerror="this.remove()">Red Hat Enterprise Linux <i>●</i> image mode · bootc'+(TE.tag?' · IMAGE '+TE.tag:'')+'</span></div>'+
       '<div class="te-class'+(deg?' deg':'')+'">'+cls+'</div>'+
     '</div>'+
     '<div class="te-docs" id="te-docs"><header><span>FIELD DOCS — RED HAT OFFLINE KNOWLEDGE PORTAL (LOCAL)</span>'+

@@ -23,6 +23,7 @@ RUN ansible-galaxy collection install community.general containers.podman
 
 COPY app.py /app/app.py
 COPY templates/ /app/templates/
+COPY static/ /app/static/
 COPY playbooks/ /app/playbooks/
 COPY deploy/container/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
